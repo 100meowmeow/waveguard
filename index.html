@@ -292,7 +292,8 @@ select option{background:#0e2030;}
       <input type="text" id="setup-mgr-code" placeholder="e.g. MGR2026"/></div>
     <div class="fg"><label>Guard Access Code <span style="color:var(--muted);font-weight:400;font-size:.65rem;">(share with all guards)</span></label>
       <input type="text" id="setup-guard-code" placeholder="e.g. POOL2026"/></div>
-    <button class="btn btn-primary" onclick="doSetup()">Create Team →</button>
+    <div id="setup-error" class="warn-box" style="display:none;margin-bottom:.5rem;"></div>
+    <button class="btn btn-primary" id="setup-btn" onclick="doSetup()">Create Team →</button>
   </div>
 </div>
 
@@ -311,6 +312,7 @@ select option{background:#0e2030;}
         <button class="eye-btn" type="button" onclick="toggleCodeVis(this)">👁</button>
       </div>
     </div>
+    <div id="login-error" class="warn-box" style="display:none;margin-bottom:.5rem;"></div>
     <button class="btn btn-primary" id="login-btn" onclick="doLogin()">Dive In →</button>
   </div>
 </div>
@@ -904,7 +906,7 @@ function dbPushKey(path){
 function startListeners(){
   // Each listener updates DATA and re-renders relevant UI
   dbListen('config',   v => { if(v) DATA.config=v; });
-  dbListen('guards',   v => { DATA.guards=v||{}; renderStaff(); renderAutoChips(); buildAssignChips(L.assignChipSelected); });
+  dbListen('guards',   v => { DATA.guards=v||{}; try{localStorage.setItem('wg_guards',JSON.stringify(v||{}));}catch(e){} renderStaff(); renderAutoChips(); buildAssignChips(L.assignChipSelected); });
   dbListen('shifts',   v => { DATA.shifts=v||{}; refreshCals(); renderNextShift(); });
   dbListen('swaps',    v => { DATA.swaps=v||{}; renderSwaps(); });
   dbListen('timeOff',  v => { DATA.timeOff=v||{}; renderGuardTimeOff(); renderMgrTimeOff(); });
@@ -999,16 +1001,51 @@ async function doSetup(){
   const last   = getVal('setup-last').trim();
   const mgrCode= getVal('setup-mgr-code').trim();
   const gCode  = getVal('setup-guard-code').trim();
-  if(!first||!last)     { toast('Enter your name','err'); return; }
-  if(mgrCode.length<4)  { toast('Manager code must be at least 4 characters','err'); return; }
-  if(gCode.length<4)    { toast('Guard code must be at least 4 characters','err'); return; }
-  if(mgrCode===gCode)   { toast('Manager and guard codes must be different','err'); return; }
 
-  const ok = await dbSet('config', { managerCode: mgrCode, guardCode: gCode,
-    managerFirst: first, managerLast: last, setupDone: true });
-  if(!ok) return;
-  toast('Team set up! Redirecting…');
-  setTimeout(()=>{ hide('setup-screen'); show('login-screen','flex'); }, 1200);
+  // Validate
+  if(!first||!last){
+    showSetupError('Please enter your first and last name.'); return;
+  }
+  if(mgrCode.length<4){
+    showSetupError('Manager code must be at least 4 characters.'); return;
+  }
+  if(gCode.length<4){
+    showSetupError('Guard code must be at least 4 characters.'); return;
+  }
+  if(mgrCode===gCode){
+    showSetupError('Manager and guard codes must be different.'); return;
+  }
+
+  const setupBtn=el('setup-btn');
+  if(setupBtn){ setupBtn.disabled=true; setupBtn.textContent='Saving…'; }
+
+  const configData = { managerCode:mgrCode, guardCode:gCode,
+    managerFirst:first, managerLast:last, setupDone:true, hourlyRate:15 };
+
+  // Save to localStorage immediately (instant, no network needed)
+  try { localStorage.setItem('wg_config', JSON.stringify(configData)); } catch(e){}
+
+  // Save to Firebase (async, may take a moment)
+  try {
+    await dbRef('config').set(configData);
+  } catch(e){
+    console.warn('Firebase write failed, using localStorage only:', e);
+  }
+
+  DATA.config = configData;
+  if(setupBtn){ setupBtn.disabled=false; setupBtn.textContent='Create Team →'; }
+  hideSetupError();
+  toast('Team created! You can now log in.');
+  setTimeout(()=>{ hide('setup-screen'); show('login-screen','flex'); }, 1000);
+}
+
+function showSetupError(msg){
+  const e=el('setup-error');
+  if(e){ e.textContent=msg; e.style.display='block'; }
+  else toast(msg,'err');
+}
+function hideSetupError(){
+  const e=el('setup-error'); if(e) e.style.display='none';
 }
 
 // ============================================================
@@ -1024,43 +1061,90 @@ async function doLogin(){
   const first=getVal('li-first').trim();
   const last =getVal('li-last').trim();
   const code =getVal('li-code').trim();
-  if(!first||!last){ toast('Enter your name','err'); return; }
-  if(!code){         toast('Enter the access code','err'); return; }
+  if(!first||!last){ showLoginError('Enter your first and last name.'); return; }
+  if(!code){         showLoginError('Enter the access code.'); return; }
 
-  // Show loading state
-  const loginBtn=el('login-btn'); if(loginBtn){ loginBtn.disabled=true; loginBtn.textContent='Checking…'; }
+  const loginBtn=el('login-btn');
+  if(loginBtn){ loginBtn.disabled=true; loginBtn.textContent='Checking…'; }
 
-  // Fetch config from Firebase
-  const config = await dbGet('config');
+  hideLoginError();
+
+  // Load config — try Firebase first, fall back to localStorage
+  let config = null;
+  try {
+    const snap = await Promise.race([
+      dbRef('config').get(),
+      new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),5000))
+    ]);
+    if(snap && snap.exists()) config = snap.val();
+  } catch(e){
+    console.warn('Firebase read failed, trying localStorage:', e);
+  }
+
+  // localStorage fallback
+  if(!config){
+    try {
+      const stored = localStorage.getItem('wg_config');
+      if(stored) config = JSON.parse(stored);
+    } catch(e){}
+  }
+
   if(loginBtn){ loginBtn.disabled=false; loginBtn.textContent='Dive In →'; }
 
   if(!config || !config.setupDone){
-    // No team set up yet — show setup page
     showSetupPage(); return;
   }
 
   DATA.config = config;
+  // Keep localStorage in sync
+  try { localStorage.setItem('wg_config', JSON.stringify(config)); } catch(e){}
 
   if(code===config.managerCode){
     L.user = { id:'manager', first, last, role:'manager' };
     startListeners();
     mountManager(first, last);
+
   } else if(code===config.guardCode){
-    // Find matching guard
-    const guards = await dbGet('guards') || {};
-    const match  = Object.entries(guards).find(([id,g])=>
+    // Find matching guard — try Firebase, fall back to cached
+    let guards = {};
+    try {
+      const gsnap = await dbRef('guards').get();
+      if(gsnap && gsnap.exists()) guards = gsnap.val();
+    } catch(e){ console.warn('Guards fetch failed:', e); }
+
+    if(!Object.keys(guards).length){
+      try {
+        const cached = localStorage.getItem('wg_guards');
+        if(cached) guards = JSON.parse(cached);
+      } catch(e){}
+    }
+
+    const match = Object.entries(guards).find(([id,g])=>
       g.first.toLowerCase()===first.toLowerCase() &&
       g.last.toLowerCase()===last.toLowerCase()
     );
-    if(!match){ toast('Name not found. Ask your manager to add you to the team.','err'); return; }
+    if(!match){
+      showLoginError('Name not found. Ask your manager to add you to the team.');
+      return;
+    }
     const [gid, gdata] = match;
-    L.user = { id: gid, first: gdata.first, last: gdata.last, role:'guard' };
+    L.user = { id:gid, first:gdata.first, last:gdata.last, role:'guard' };
     DATA.guards = guards;
     startListeners();
     mountGuard(gdata.first, gdata.last);
+
   } else {
-    toast('Wrong access code','err');
+    showLoginError('Wrong access code. Try again.');
   }
+}
+
+function showLoginError(msg){
+  const e=el('login-error');
+  if(e){ e.textContent=msg; e.style.display='block'; }
+  else toast(msg,'err');
+}
+function hideLoginError(){
+  const e=el('login-error'); if(e) e.style.display='none';
 }
 
 function mountGuard(first, last){
@@ -2000,17 +2084,34 @@ function downloadCSV(filename,rows){
 }
 
 // ============================================================
-// BOOT — check if setup is needed
+// BOOT — instant check from localStorage, no Firebase wait
 // ============================================================
-async function boot(){
-  // Show loading
-  const loginBtn=el('login-btn'); if(loginBtn){ loginBtn.disabled=true; loginBtn.textContent='Loading…'; }
-  const config=await dbGet('config');
-  if(loginBtn){ loginBtn.disabled=false; loginBtn.textContent='Dive In →'; }
-  if(!config || !config.setupDone){
-    showSetupPage();
-  }
-  // Otherwise just show login screen (already visible)
+function boot(){
+  // Check localStorage immediately — no network round trip
+  try {
+    const stored = localStorage.getItem('wg_config');
+    if(stored){
+      const config = JSON.parse(stored);
+      if(config && config.setupDone){
+        // Setup done — show login screen (already visible by default)
+        return;
+      }
+    }
+  } catch(e){}
+
+  // No local config — check Firebase in background
+  // Show setup screen after short delay if Firebase also has no config
+  const t = setTimeout(()=>{ showSetupPage(); }, 1500);
+  dbRef('config').get().then(snap=>{
+    clearTimeout(t);
+    if(!snap || !snap.exists() || !snap.val().setupDone){
+      showSetupPage();
+    }
+    // else: setup done, login screen stays visible
+  }).catch(()=>{
+    clearTimeout(t);
+    showSetupPage(); // Can't reach Firebase, assume first time
+  });
 }
 boot();
 
