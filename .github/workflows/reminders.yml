@@ -1,0 +1,24 @@
+name: WaveGuard Shift Reminders
+
+on:
+  schedule:
+    # Runs every 30 minutes
+    - cron: '*/30 * * * *'
+  workflow_dispatch:  # allows manual trigger from GitHub UI for testing
+
+jobs:
+  send-reminders:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run reminder script
+        env:
+          GROUPME_BOT_ID: ${{ secrets.GROUPME_BOT_ID }}
+        run: node reminder.js
