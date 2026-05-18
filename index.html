@@ -1,0 +1,2020 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WaveGuard</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --wave:#2ec4e0;--sky:#1a8ab0;--ocean:#0a4f6e;
+  --coral:#ff6b4a;--green:#2dd4a0;--yellow:#ffd166;--sand:#f5e6c8;
+  --bg:#0d1b2a;--card:rgba(255,255,255,.07);--border:rgba(255,255,255,.12);--muted:#7a95a8;
+}
+html,body{min-height:100vh;background:var(--bg);}
+body{font-family:'DM Sans',sans-serif;color:#fff;overflow-x:hidden;
+  background-image:radial-gradient(ellipse at 15% 15%,rgba(46,196,224,.1) 0%,transparent 55%),
+  radial-gradient(ellipse at 85% 85%,rgba(10,79,110,.22) 0%,transparent 55%);}
+#app{max-width:480px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;}
+
+/* LOGIN */
+#login-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:2rem;}
+.logo{font-family:'Bebas Neue',sans-serif;font-size:4rem;letter-spacing:4px;color:var(--wave);text-shadow:0 0 40px rgba(46,196,224,.35);margin-bottom:.1rem;}
+.logo-sub{font-size:.72rem;letter-spacing:4px;text-transform:uppercase;color:var(--muted);margin-bottom:2.2rem;}
+.wave-icon{font-size:3rem;display:inline-block;animation:bob 3s ease-in-out infinite;margin-bottom:.7rem;}
+@keyframes bob{0%,100%{transform:translateY(0);}50%{transform:translateY(-8px);}}
+.login-card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:2rem;width:100%;}
+.login-card h2{font-size:.95rem;font-weight:500;color:var(--muted);margin-bottom:1.3rem;text-align:center;}
+.pw-wrap{position:relative;}
+.pw-wrap input{padding-right:2.8rem;}
+.eye-btn{position:absolute;right:.75rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--muted);font-size:1rem;line-height:1;padding:.2rem;}
+
+/* FORMS */
+.fg{margin-bottom:.85rem;}
+label{display:block;font-size:.66rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:.32rem;}
+input,select,textarea{width:100%;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:10px;padding:.7rem 1rem;color:#fff;font-family:'DM Sans',sans-serif;font-size:.93rem;outline:none;transition:border-color .2s;}
+input:focus,select:focus{border-color:var(--wave);}
+select option{background:#0e2030;}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;}
+
+/* BUTTONS */
+.btn{width:100%;padding:.75rem;border:none;border-radius:12px;font-family:'DM Sans',sans-serif;font-size:.9rem;font-weight:600;cursor:pointer;transition:all .18s;margin-top:.45rem;display:inline-block;text-align:center;line-height:1.3;}
+.btn-primary{background:linear-gradient(135deg,var(--wave),var(--sky));color:#fff;}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(46,196,224,.28);}
+.btn-coral{background:linear-gradient(135deg,var(--coral),#ff8c6b);color:#fff;}
+.btn-green{background:linear-gradient(135deg,var(--green),#1fa87a);color:#fff;}
+.btn-ghost{background:transparent;border:1px solid var(--border);color:var(--muted);}
+.btn-ghost:hover{border-color:var(--wave);color:var(--wave);}
+.btn-yellow{background:rgba(255,209,102,.12);border:1px solid rgba(255,209,102,.28);color:var(--yellow);}
+.btn-danger{background:rgba(255,107,74,.1);border:1px solid rgba(255,107,74,.28);color:var(--coral);}
+.btn-sm{width:auto;padding:.32rem .75rem;font-size:.75rem;border-radius:8px;margin-top:0;}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none;}
+.btn-row{display:flex;gap:.6rem;margin-top:.45rem;}
+.btn-row .btn{margin-top:0;flex:1;}
+
+/* HEADER */
+.app-header{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.1rem 0;flex-shrink:0;position:relative;z-index:50;}
+.app-logo{font-family:'Bebas Neue',sans-serif;font-size:1.7rem;letter-spacing:3px;color:var(--wave);}
+.hdr-user{display:flex;align-items:center;gap:.45rem;position:relative;}
+.avatar{width:33px;height:33px;border-radius:50%;background:linear-gradient(135deg,var(--wave),var(--ocean));display:flex;align-items:center;justify-content:center;font-size:.82rem;font-weight:700;cursor:pointer;flex-shrink:0;user-select:none;}
+.user-dd{position:absolute;top:calc(100% + 7px);right:0;background:#0e2030;border:1px solid var(--border);border-radius:12px;min-width:160px;z-index:200;overflow:hidden;box-shadow:0 8px 26px rgba(0,0,0,.5);}
+.user-dd.hidden{display:none;}
+.dd-name{padding:.65rem 1rem;font-size:.83rem;color:#fff;font-weight:600;border-bottom:1px solid var(--border);}
+.dd-role{font-size:.65rem;color:var(--muted);font-weight:400;margin-top:.08rem;}
+.dd-item{padding:.6rem 1rem;font-size:.82rem;color:var(--muted);cursor:pointer;transition:background .13s;}
+.dd-item:hover{background:rgba(255,255,255,.06);color:#fff;}
+.dd-item.danger{color:var(--coral);}
+
+/* NAV */
+.bottom-nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;background:rgba(13,27,42,.97);border-top:1px solid var(--border);display:flex;z-index:100;}
+.nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;padding:.6rem .15rem .85rem;cursor:pointer;border:none;background:transparent;color:var(--muted);font-family:'DM Sans',sans-serif;transition:color .15s;}
+.nav-btn.active{color:var(--wave);}
+.nav-icon{font-size:1.15rem;margin-bottom:.1rem;}
+.nav-label{font-size:.5rem;letter-spacing:.5px;text-transform:uppercase;}
+
+/* MAIN */
+.main-content{flex:1;padding:.85rem 1.05rem 5.5rem;overflow-y:auto;}
+.screen{display:none;}.screen.active{display:block;}
+.section-title{font-family:'Bebas Neue',sans-serif;font-size:1.45rem;letter-spacing:2px;margin-bottom:.85rem;}
+.card-title{font-size:.6rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:.7rem;}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:1.05rem;margin-bottom:.85rem;}
+.empty{color:var(--muted);font-size:.82rem;padding:.3rem 0;}
+.divider{border:none;border-top:1px solid var(--border);margin:.7rem 0;}
+.info-box{background:rgba(46,196,224,.06);border:1px solid rgba(46,196,224,.15);border-radius:9px;padding:.6rem .85rem;font-size:.78rem;color:var(--muted);margin-bottom:.65rem;}
+.warn-box{background:rgba(255,107,74,.07);border:1px solid rgba(255,107,74,.25);border-radius:9px;padding:.6rem .85rem;font-size:.78rem;color:var(--coral);margin-bottom:.65rem;}
+
+/* HOME */
+.greeting h1{font-family:'Bebas Neue',sans-serif;font-size:1.95rem;letter-spacing:2px;line-height:1.1;margin-bottom:.18rem;}
+.greeting p{color:var(--muted);font-size:.8rem;margin-bottom:.95rem;}
+.next-card{background:linear-gradient(135deg,rgba(46,196,224,.12),rgba(10,79,110,.26));border:1px solid rgba(46,196,224,.2);border-radius:14px;padding:1.2rem;margin-bottom:.85rem;}
+.next-lbl{font-size:.58rem;letter-spacing:2px;text-transform:uppercase;color:var(--wave);margin-bottom:.28rem;}
+.next-date{font-size:1.25rem;font-weight:600;}
+.next-time{color:var(--muted);font-size:.84rem;margin-top:.12rem;}
+.clock-row{display:flex;gap:.65rem;margin-bottom:.85rem;}
+.clock-row .btn{margin-top:0;flex:1;}
+.quick-grid{display:grid;grid-template-columns:1fr 1fr;gap:.65rem;margin-bottom:.85rem;}
+.qc{background:var(--card);border:1px solid var(--border);border-radius:13px;padding:.85rem;cursor:pointer;text-align:center;transition:border-color .15s,transform .15s;}
+.qc:hover{border-color:var(--wave);transform:translateY(-2px);}
+.qc-icon{font-size:1.6rem;margin-bottom:.25rem;}
+.qc-label{font-size:.7rem;color:var(--muted);}
+.status-bar{display:flex;align-items:center;gap:.45rem;padding:.5rem .85rem;border-radius:9px;font-size:.78rem;margin-bottom:.72rem;}
+.sb-in{background:rgba(45,212,160,.09);border:1px solid rgba(45,212,160,.2);color:var(--green);}
+.sb-out{background:rgba(122,149,168,.07);border:1px solid var(--border);color:var(--muted);}
+.dot{width:7px;height:7px;border-radius:50%;background:currentColor;flex-shrink:0;}
+.dot.pulse{animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+.big-btn{width:100%;background:rgba(255,107,74,.09);border:1px solid rgba(255,107,74,.28);border-radius:13px;padding:.88rem;cursor:pointer;display:flex;align-items:center;gap:.8rem;font-family:'DM Sans',sans-serif;color:#fff;transition:background .18s;margin-bottom:.6rem;text-align:left;}
+.big-btn:hover{background:rgba(255,107,74,.16);}
+.big-btn.yellow-btn{background:rgba(255,209,102,.07);border-color:rgba(255,209,102,.25);}
+.big-btn.yellow-btn:hover{background:rgba(255,209,102,.13);}
+.bb-icon{font-size:1.7rem;flex-shrink:0;}
+.bb-strong{display:block;font-size:.86rem;font-weight:600;}
+.bb-small{color:var(--muted);font-size:.72rem;}
+.bb-strong-yellow{display:block;font-size:.86rem;font-weight:600;color:var(--yellow);}
+
+/* CALENDAR */
+.cal-month{margin-bottom:1.7rem;}
+.cal-month-name{font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:2px;color:var(--wave);margin-bottom:.38rem;}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;}
+.cal-hdr{text-align:center;font-size:.56rem;letter-spacing:.6px;color:var(--muted);padding:.2rem 0;}
+.cal-cell{aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:.19rem;border-radius:7px;cursor:pointer;font-size:.73rem;color:#fff;transition:background .12s;user-select:none;}
+.cal-cell:hover{background:rgba(46,196,224,.09);}
+.cal-cell.today{background:rgba(46,196,224,.15);border:1px solid rgba(46,196,224,.28);}
+.cal-cell.selected{background:rgba(46,196,224,.25);border:1px solid var(--wave);}
+
+/* CAL CELL TYPE DOTS */
+.cal-cell.has-shift::after{content:'';width:5px;height:5px;background:var(--wave);border-radius:50%;margin-top:1px;display:block;}
+.cal-cell.understaffed::after{background:var(--coral);}
+.cal-cell.type-party::after{background:var(--yellow);}
+.cal-cell.type-swim::after{background:var(--green);}
+.cal-cell.type-custom::after{background:var(--coral);}
+.cal-cell.multi-type::after{background:linear-gradient(135deg,var(--wave),var(--yellow));}
+
+.cal-cell.blank{cursor:default;opacity:0;pointer-events:none;}
+.cal-legend{font-size:.67rem;color:var(--muted);margin-bottom:.85rem;}
+
+/* SHIFT POPUP */
+.overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.65);z-index:300;align-items:flex-end;justify-content:center;}
+.overlay.open{display:flex;}
+.overlay.center-ov{align-items:center;}
+.sheet{background:#0e2030;border:1px solid var(--border);border-radius:18px 18px 0 0;padding:1.3rem;width:100%;max-width:480px;max-height:84vh;overflow-y:auto;}
+.center-ov .sheet{border-radius:18px;max-height:80vh;margin:1rem;}
+.sheet-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:.95rem;}
+.sheet-title{font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;}
+.sheet-close{background:none;border:none;color:var(--muted);font-size:1.35rem;cursor:pointer;line-height:1;padding:.15rem;}
+
+/* SHIFT CARDS */
+.shift-card{background:rgba(46,196,224,.05);border:1px solid rgba(46,196,224,.14);border-radius:10px;padding:.82rem;margin-bottom:.55rem;}
+.shift-card.party-card{background:rgba(255,209,102,.05);border-color:rgba(255,209,102,.17);}
+.shift-card.swim-card{background:rgba(45,212,160,.05);border-color:rgba(45,212,160,.17);}
+.shift-card.under-card{background:rgba(255,107,74,.05);border-color:rgba(255,107,74,.2);}
+.type-badge{display:inline-block;padding:.13rem .48rem;border-radius:20px;font-size:.58rem;letter-spacing:.6px;text-transform:uppercase;margin-bottom:.32rem;}
+.tb-regular{background:rgba(46,196,224,.12);color:var(--wave);}
+.tb-party{background:rgba(255,209,102,.12);color:var(--yellow);}
+.tb-swim{background:rgba(45,212,160,.12);color:var(--green);}
+.tb-custom{background:rgba(255,107,74,.12);color:var(--coral);}
+.s-time{font-weight:600;font-size:.9rem;margin-bottom:.2rem;}
+.s-guards{color:var(--muted);font-size:.77rem;margin-bottom:.18rem;}
+.s-note{color:var(--sand);font-size:.73rem;font-style:italic;margin-bottom:.18rem;}
+.s-warn{color:var(--coral);font-size:.71rem;}
+.s-actions{display:flex;gap:.38rem;margin-top:.52rem;flex-wrap:wrap;}
+
+/* SWAPS */
+.swap-type-grid{display:grid;grid-template-columns:1fr 1fr;gap:.65rem;margin-bottom:.95rem;}
+.swap-tc{background:var(--card);border:1px solid var(--border);border-radius:13px;padding:.88rem;cursor:pointer;text-align:center;transition:border-color .15s,transform .15s;}
+.swap-tc:hover{border-color:var(--wave);transform:translateY(-2px);}
+.swap-tc-icon{font-size:1.75rem;margin-bottom:.25rem;}
+.swap-tc-title{font-weight:600;font-size:.84rem;}
+.swap-tc-sub{font-size:.69rem;color:var(--muted);margin-top:.14rem;}
+.swap-card{background:var(--card);border:1px solid var(--border);border-radius:13px;padding:.95rem;margin-bottom:.68rem;}
+.sw-head{font-weight:600;font-size:.88rem;margin-bottom:.22rem;}
+.sw-detail{color:var(--muted);font-size:.77rem;margin-bottom:.2rem;}
+.sw-msg{font-size:.74rem;color:var(--sand);font-style:italic;margin-bottom:.32rem;}
+.sw-actions{display:flex;gap:.38rem;flex-wrap:wrap;margin-top:.52rem;}
+.sw-rounds{font-size:.68rem;color:var(--muted);margin-top:.28rem;}
+.badge{display:inline-block;padding:.13rem .48rem;border-radius:20px;font-size:.58rem;letter-spacing:.6px;text-transform:uppercase;margin-bottom:.3rem;margin-right:.25rem;}
+.b-blue{background:rgba(46,196,224,.12);color:var(--wave);}
+.b-yellow{background:rgba(255,209,102,.12);color:var(--yellow);}
+.b-green{background:rgba(45,212,160,.12);color:var(--green);}
+.b-coral{background:rgba(255,107,74,.12);color:var(--coral);}
+.b-gray{background:rgba(122,149,168,.12);color:var(--muted);}
+
+/* TIMESHEET */
+.hrs-big{font-family:'Bebas Neue',sans-serif;font-size:3rem;letter-spacing:2px;color:var(--wave);}
+.hrs-lbl{color:var(--muted);font-size:.68rem;letter-spacing:2px;text-transform:uppercase;}
+.pay-est{color:var(--green);font-size:.93rem;font-weight:600;margin-top:.32rem;}
+.ts-row{display:flex;justify-content:space-between;align-items:center;padding:.6rem 0;border-bottom:1px solid var(--border);font-size:.82rem;}
+.ts-date{color:var(--muted);}
+.ts-hrs{font-weight:600;color:var(--wave);}
+
+/* TIME OFF */
+.to-row{display:flex;justify-content:space-between;align-items:flex-start;padding:.68rem 0;border-bottom:1px solid var(--border);}
+.to-name{font-weight:500;font-size:.85rem;}
+.to-dates{color:var(--muted);font-size:.75rem;margin-top:.08rem;}
+.to-reason{font-size:.71rem;color:var(--sand);font-style:italic;margin-top:.08rem;}
+.to-actions{display:flex;gap:.38rem;margin-top:.38rem;flex-wrap:wrap;}
+.status-pill{display:inline-block;padding:.12rem .48rem;border-radius:20px;font-size:.58rem;letter-spacing:.6px;text-transform:uppercase;}
+.sp-pending{background:rgba(255,209,102,.12);color:var(--yellow);}
+.sp-approved{background:rgba(45,212,160,.12);color:var(--green);}
+.sp-denied{background:rgba(255,107,74,.12);color:var(--coral);}
+
+/* STAFF */
+.guard-row{display:flex;align-items:center;justify-content:space-between;padding:.68rem 0;border-bottom:1px solid var(--border);}
+.guard-left{display:flex;align-items:center;gap:.68rem;}
+.g-av{width:33px;height:33px;border-radius:50%;background:linear-gradient(135deg,var(--wave),var(--ocean));display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:700;flex-shrink:0;}
+.g-av.backup-av{background:linear-gradient(135deg,var(--yellow),#c87900);}
+.g-name{font-weight:500;font-size:.85rem;}
+.g-meta{font-size:.72rem;color:var(--muted);}
+.g-tag{display:inline-block;padding:.11rem .42rem;border-radius:20px;font-size:.57rem;letter-spacing:.6px;text-transform:uppercase;margin-top:.16rem;}
+.tag-reg{background:rgba(46,196,224,.11);color:var(--wave);}
+.tag-bk{background:rgba(255,209,102,.11);color:var(--yellow);}
+
+/* TABS */
+.tab-row{display:flex;gap:.4rem;margin-bottom:.95rem;flex-wrap:wrap;}
+.tab{padding:.4rem .85rem;border-radius:20px;font-size:.75rem;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'DM Sans',sans-serif;transition:all .18s;}
+.tab.active{background:var(--wave);border-color:var(--wave);color:#0d1b2a;font-weight:600;}
+
+/* CHIPS */
+.chips{display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.3rem;}
+.chip{padding:.24rem .68rem;border-radius:20px;font-size:.7rem;cursor:pointer;background:rgba(255,255,255,.04);border:1px solid var(--border);color:var(--muted);transition:all .13s;}
+.chip.on{background:rgba(46,196,224,.11);border-color:var(--wave);color:var(--wave);}
+
+/* CHECKBOX */
+.cb-row{display:flex;align-items:center;gap:.5rem;padding:.4rem 0;}
+.cb-row input[type=checkbox]{width:auto;cursor:pointer;}
+
+/* PROGRESS */
+.progress-bar{background:rgba(255,255,255,.07);border-radius:10px;height:7px;overflow:hidden;margin:.8rem 0;}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--wave),var(--sky));border-radius:10px;width:0;transition:width 2.2s ease;}
+
+/* TOAST */
+.toast{position:fixed;top:1.1rem;left:50%;transform:translateX(-50%) translateY(-110px);background:var(--green);color:#0d1b2a;padding:.6rem 1.3rem;border-radius:30px;font-weight:600;font-size:.78rem;z-index:700;transition:transform .27s ease;white-space:nowrap;pointer-events:none;max-width:92vw;text-align:center;}
+.toast.show{transform:translateX(-50%) translateY(0);}
+.toast.err{background:var(--coral);color:#fff;}
+.toast.warn{background:var(--yellow);color:#0d1b2a;}
+
+/* CONFIRM DIALOG */
+.confirm-ov{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.75);z-index:600;align-items:center;justify-content:center;}
+.confirm-ov.open{display:flex;}
+.confirm-box{background:#0e2030;border:1px solid var(--border);border-radius:16px;padding:1.5rem;width:calc(100% - 3rem);max-width:340px;text-align:center;}
+.confirm-box h3{font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;margin-bottom:.6rem;}
+.confirm-box p{color:var(--muted);font-size:.84rem;margin-bottom:1.2rem;line-height:1.5;}
+.confirm-box-btns{display:flex;gap:.6rem;}
+.confirm-box-btns .btn{margin-top:0;flex:1;}
+
+/* EVENT LOG */
+.log-entry{display:flex;align-items:flex-start;gap:.7rem;padding:.65rem 0;border-bottom:1px solid var(--border);}
+.log-icon{font-size:1.1rem;flex-shrink:0;margin-top:.05rem;}
+.log-body{flex:1;min-width:0;}
+.log-msg{font-size:.83rem;color:#fff;line-height:1.4;margin-bottom:.12rem;}
+.log-meta{font-size:.7rem;color:var(--muted);}
+.log-green .log-msg{color:var(--green);}
+.log-red .log-msg{color:var(--coral);}
+.log-coral .log-msg{color:var(--coral);}
+.log-yellow .log-msg{color:var(--yellow);}
+.log-blue .log-msg{color:var(--wave);}
+.log-filters{display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.85rem;}
+.log-search{margin-bottom:.7rem;}
+
+/* PAYROLL TABLE */
+.pay-table{width:100%;border-collapse:collapse;font-size:.82rem;}
+.pay-table th{text-align:left;font-size:.62rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);padding:.5rem .3rem;border-bottom:1px solid var(--border);}
+.pay-table td{padding:.55rem .3rem;border-bottom:1px solid rgba(255,255,255,.06);color:#fff;}
+.pay-table tr:last-child td{border-bottom:none;}
+.pay-table .td-hrs{color:var(--wave);font-weight:600;}
+.pay-table .td-pay{color:var(--green);font-weight:600;}
+.pay-table tfoot td{border-top:1px solid var(--border);font-weight:600;padding-top:.7rem;}
+.pay-period-row{display:flex;gap:.6rem;margin-bottom:.85rem;align-items:flex-end;}
+.pay-period-row .fg{flex:1;margin-bottom:0;}
+
+/* NOTIFICATION BADGE */
+.nav-btn-wrap{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;}
+.notif-badge{position:absolute;top:.35rem;right:calc(50% - 1rem);background:var(--coral);color:#fff;border-radius:50%;width:16px;height:16px;font-size:.55rem;font-weight:700;display:none;align-items:center;justify-content:center;line-height:1;}
+</style>
+</head>
+<body>
+<div id="app">
+<div id="toast" class="toast"></div>
+
+
+<!-- ===== SETUP SCREEN (first-time manager onboarding) ===== -->
+<div id="setup-screen" style="display:none;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:2rem;">
+  <div class="wave-icon">🏊</div>
+  <div class="logo">WaveGuard</div>
+  <div class="logo-sub">First Time Setup</div>
+  <div class="login-card">
+    <h2>Create Your Team</h2>
+    <p style="color:var(--muted);font-size:.78rem;margin-bottom:1.2rem;text-align:center;">Set up once. Your team will use these codes every season.</p>
+    <div class="fg"><label>Your First Name</label><input type="text" id="setup-first" placeholder="Manager first name"/></div>
+    <div class="fg"><label>Your Last Name</label><input type="text" id="setup-last" placeholder="Manager last name"/></div>
+    <div class="fg"><label>Your Manager Code <span style="color:var(--muted);font-weight:400;font-size:.65rem;">(min 4 chars — keep this private)</span></label>
+      <input type="text" id="setup-mgr-code" placeholder="e.g. MGR2026"/></div>
+    <div class="fg"><label>Guard Access Code <span style="color:var(--muted);font-weight:400;font-size:.65rem;">(share with all guards)</span></label>
+      <input type="text" id="setup-guard-code" placeholder="e.g. POOL2026"/></div>
+    <button class="btn btn-primary" onclick="doSetup()">Create Team →</button>
+  </div>
+</div>
+
+<!-- ===== LOGIN ===== -->
+<div id="login-screen">
+  <div class="wave-icon">🏊</div>
+  <div class="logo">WaveGuard</div>
+  <div class="logo-sub">Lifeguard Scheduling · Season 2025</div>
+  <div class="login-card">
+    <h2>Sign In</h2>
+    <div class="fg"><label>First Name</label><input type="text" id="li-first" placeholder="Your first name" autocomplete="given-name"/></div>
+    <div class="fg"><label>Last Name</label><input type="text" id="li-last" placeholder="Your last name" autocomplete="family-name"/></div>
+    <div class="fg"><label>Team Access Code</label>
+      <div class="pw-wrap">
+        <input type="password" id="li-code" placeholder="Enter access code" autocomplete="off"/>
+        <button class="eye-btn" type="button" onclick="toggleCodeVis(this)">👁</button>
+      </div>
+    </div>
+    <button class="btn btn-primary" id="login-btn" onclick="doLogin()">Dive In →</button>
+  </div>
+</div>
+
+<!-- ===== GUARD APP ===== -->
+<div id="guard-app" style="display:none;flex-direction:column;min-height:100vh;">
+  <div class="app-header">
+    <div class="app-logo">WaveGuard</div>
+    <div class="hdr-user">
+      <span id="g-hdr-name" style="font-size:.82rem;color:var(--muted);"></span>
+      <div class="avatar" id="g-avatar" onclick="toggleDD('g-dd')">?</div>
+      <div class="user-dd hidden" id="g-dd">
+        <div class="dd-name" id="g-dd-name">—<div class="dd-role">Lifeguard</div></div>
+        <div class="dd-item danger" onclick="doLogout()">↩ Log Out</div>
+      </div>
+    </div>
+  </div>
+  <div class="main-content">
+    <!-- GUARD HOME -->
+    <div class="screen active" id="g-screen-home">
+      <div class="greeting"><h1 id="g-greeting">HEY!</h1><p id="g-date"></p></div>
+      <div id="g-clock-status" class="status-bar sb-out"><span class="dot"></span><span id="g-clock-txt">Not clocked in</span></div>
+      <div class="next-card">
+        <div class="next-lbl">Next Shift</div>
+        <div class="next-date" id="g-next-date">—</div>
+        <div class="next-time" id="g-next-time"></div>
+      </div>
+      <div class="clock-row">
+        <button class="btn btn-green" id="g-btn-ci" onclick="clockIn()">⏱ Clock In</button>
+        <button class="btn btn-ghost" id="g-btn-co" onclick="clockOut()" style="display:none">⏹ Clock Out</button>
+      </div>
+      <div class="quick-grid">
+        <div class="qc" onclick="gNav('calendar')"><div class="qc-icon">📅</div><div class="qc-label">Schedule</div></div>
+        <div class="qc" onclick="gNav('swaps')"><div class="qc-icon">🔄</div><div class="qc-label">Swaps</div></div>
+        <div class="qc" onclick="gNav('timesheet')"><div class="qc-icon">💰</div><div class="qc-label">My Hours</div></div>
+        <div class="qc" onclick="gNav('timeoff')"><div class="qc-icon">🗓</div><div class="qc-label">Time Off</div></div>
+      </div>
+      <button class="big-btn" onclick="openSickModal()">
+        <span class="bb-icon">🤒</span>
+        <span><span class="bb-strong">I Can't Make My Shift</span><span class="bb-small">Emergency alert → all guards + manager</span></span>
+      </button>
+    </div>
+    <!-- GUARD CALENDAR -->
+    <div class="screen" id="g-screen-calendar">
+      <div class="section-title">SEASON SCHEDULE</div>
+      <div class="cal-legend">🔵 Regular &nbsp;·&nbsp; 🟡 Party &nbsp;·&nbsp; 🟢 Swim Meet &nbsp;·&nbsp; 🔴 Understaffed</div>
+      <div id="g-season-cal"></div>
+    </div>
+    <!-- GUARD SWAPS -->
+    <div class="screen" id="g-screen-swaps">
+      <div class="section-title">SHIFT SWAPS</div>
+      <div class="swap-type-grid">
+        <div class="swap-tc" onclick="openSwapModal('swap')"><div class="swap-tc-icon">🔄</div><div class="swap-tc-title">Swap Shifts</div><div class="swap-tc-sub">Trade your shift for one of theirs</div></div>
+        <div class="swap-tc" onclick="openSwapModal('give')"><div class="swap-tc-icon">📢</div><div class="swap-tc-title">Give Shift Away</div><div class="swap-tc-sub">Broadcast — first to accept wins</div></div>
+      </div>
+      <div class="card-title">INCOMING</div>
+      <div id="g-swaps-in"></div>
+      <div class="card-title" style="margin-top:.85rem;">YOUR REQUESTS</div>
+      <div id="g-swaps-out"></div>
+    </div>
+    <!-- GUARD TIMESHEET -->
+    <div class="screen" id="g-screen-timesheet">
+      <div class="section-title">MY HOURS</div>
+      <div class="card" style="text-align:center;margin-bottom:.85rem;">
+        <div class="card-title">THIS PAY PERIOD</div>
+        <div class="hrs-big" id="g-total-hrs">0.0</div>
+        <div class="hrs-lbl">Hours Worked</div>
+        <div class="pay-est" id="g-pay-est">Est. $0.00</div>
+      </div>
+      <div class="card"><div class="card-title">LOG</div><div id="g-ts-log"></div></div>
+    </div>
+    <!-- GUARD TIME OFF -->
+    <div class="screen" id="g-screen-timeoff">
+      <div class="section-title">TIME OFF</div>
+      <div class="card">
+        <div class="card-title">REQUEST TIME OFF</div>
+        <div class="row2">
+          <div class="fg"><label>From</label><input type="date" id="g-to-from"/></div>
+          <div class="fg"><label>To</label><input type="date" id="g-to-to"/></div>
+        </div>
+        <div class="fg"><label>Reason (only manager sees this)</label><input type="text" id="g-to-reason" placeholder="e.g. Family trip"/></div>
+        <button class="btn btn-primary" onclick="submitTimeOff()" style="margin-top:0">Submit</button>
+      </div>
+
+    <div class="card" style="margin-top:.8rem;">
+      <div class="card-title">NOTIFICATIONS</div>
+      <p style="color:var(--muted);font-size:.78rem;margin-bottom:.8rem;">Choose how you receive shift reminders and alerts.</p>
+      <div class="cb-row"><input type="checkbox" id="notif-groupme" checked onchange="saveNotifPrefs()"/><label style="text-transform:none;letter-spacing:0;font-size:.84rem;">GroupMe notifications</label></div>
+      <div class="cb-row"><input type="checkbox" id="notif-reminders" checked onchange="saveNotifPrefs()"/><label style="text-transform:none;letter-spacing:0;font-size:.84rem;">Shift reminders</label></div>
+      <div class="cb-row"><input type="checkbox" id="notif-alerts" checked onchange="saveNotifPrefs()"/><label style="text-transform:none;letter-spacing:0;font-size:.84rem;">Emergency coverage alerts</label></div>
+    </div>
+      <div class="card-title" style="margin-top:.8rem;">ALL TIME OFF</div>
+      <p style="color:var(--muted);font-size:.73rem;margin-bottom:.65rem;">Everyone sees who's off. Only manager sees the reason.</p>
+      <div id="g-timeoff-list"></div>
+    </div>
+  </div>
+  <nav class="bottom-nav">
+    <button class="nav-btn active" id="g-nav-home" onclick="gNav('home',this)"><div class="nav-icon">🏠</div><div class="nav-label">Home</div></button>
+    <button class="nav-btn" id="g-nav-calendar" onclick="gNav('calendar',this)"><div class="nav-icon">📅</div><div class="nav-label">Schedule</div></button>
+    <button class="nav-btn" id="g-nav-swaps" onclick="gNav('swaps',this)"><div class="nav-icon">🔄</div><div class="nav-label">Swaps</div></button>
+    <button class="nav-btn" id="g-nav-timesheet" onclick="gNav('timesheet',this)"><div class="nav-icon">💰</div><div class="nav-label">Hours</div></button>
+    <button class="nav-btn" id="g-nav-timeoff" onclick="gNav('timeoff',this)"><div class="nav-icon">🗓</div><div class="nav-label">Time Off</div></button>
+  </nav>
+</div>
+
+
+<!-- Excel import modal -->
+<div class="overlay" id="ov-excel">
+  <div class="sheet">
+    <div class="sheet-hdr"><div class="sheet-title">📊 IMPORT FROM EXCEL</div><button class="sheet-close" onclick="closeOv('ov-excel')">✕</button></div>
+    <p style="color:var(--muted);font-size:.82rem;margin-bottom:.9rem;">Upload an Excel file to bulk-create shifts. Download the template first to see the correct column format.</p>
+    <button class="btn btn-ghost" onclick="downloadExcelTemplate()" style="width:100%;margin-bottom:.7rem;margin-top:0">↓ Download Template (.xlsx)</button>
+    <div class="fg"><label>Upload Shift File (.xlsx)</label>
+      <input type="file" id="excel-file-input" accept=".xlsx,.xls" onchange="handleExcelUpload(event)" style="cursor:pointer;"/>
+    </div>
+    <div class="info-box" style="margin-top:.5rem;">Columns needed: Date (YYYY-MM-DD), Start (HH:MM), End (HH:MM), Type, Guards Required, Arrive By, Notes</div>
+    <button class="btn btn-ghost" onclick="closeOv('ov-excel')" style="margin-top:.5rem;width:100%">Cancel</button>
+  </div>
+</div>
+
+<!-- ===== MANAGER APP ===== -->
+<div id="mgr-app" style="display:none;flex-direction:column;min-height:100vh;">
+  <div class="app-header">
+    <div class="app-logo">WaveGuard</div>
+    <div class="hdr-user">
+      <span id="m-hdr-name" style="font-size:.82rem;color:var(--muted);"></span>
+      <div class="avatar" id="m-avatar" onclick="toggleDD('m-dd')" style="background:linear-gradient(135deg,var(--yellow),#c87900);">M</div>
+      <div class="user-dd hidden" id="m-dd">
+        <div class="dd-name" id="m-dd-name">—<div class="dd-role">Manager</div></div>
+        <div class="dd-item danger" onclick="doLogout()">↩ Log Out</div>
+      </div>
+    </div>
+  </div>
+  <div class="main-content">
+    <!-- MGR HOME -->
+    <div class="screen active" id="m-screen-home">
+      <div class="greeting"><h1 id="m-greeting">MANAGER</h1><p id="m-date"></p></div>
+      <div class="quick-grid">
+        <div class="qc" onclick="mNav('calendar')"><div class="qc-icon">📅</div><div class="qc-label">Schedule</div></div>
+        <div class="qc" onclick="mNav('timeoff')"><div class="qc-icon">🗓</div><div class="qc-label">Time Off</div></div>
+        <div class="qc" onclick="mNav('log')"><div class="qc-icon">📋</div><div class="qc-label">Event Log</div></div>
+        <div class="qc" onclick="mNav('payroll')"><div class="qc-icon">💵</div><div class="qc-label">Payroll</div></div>
+        <div class="qc" onclick="mNav('staff')"><div class="qc-icon">👥</div><div class="qc-label">Staff</div></div>
+        <div class="qc" onclick="mNav('settings')"><div class="qc-icon">⚙️</div><div class="qc-label">Settings</div></div>
+      </div>
+      <button class="big-btn yellow-btn" onclick="openClosureModal()">
+        <span class="bb-icon">⚠️</span>
+        <span><span class="bb-strong-yellow">Pool Closure Alert</span><span class="bb-small">Notify entire team via GroupMe</span></span>
+      </button>
+    </div>
+    <!-- MGR CALENDAR -->
+    <div class="screen" id="m-screen-calendar">
+      <div class="section-title">SEASON SCHEDULE</div>
+      <div class="cal-legend">🔵 Regular &nbsp;·&nbsp; 🟡 Party &nbsp;·&nbsp; 🟢 Swim Meet &nbsp;·&nbsp; 🔴 Understaffed</div>
+      <div id="m-season-cal"></div>
+      <button class="btn btn-primary" onclick="openAddShift(null)" style="width:100%;margin-top:0">+ Add Shift</button>
+      <div class="btn-row" style="margin-top:.55rem;">
+        <button class="btn btn-ghost" onclick="openAutoSchedule()" style="margin-top:0">⚡ Auto-Schedule</button>
+        <button class="btn btn-ghost" onclick="openCopyWeek()" style="margin-top:0">📋 Copy Week</button>
+      </div>
+      <button class="btn btn-ghost" onclick="openExcelImport()" style="width:100%;margin-top:.4rem">📊 Import from Excel</button>
+    </div>
+    <!-- MGR TIME OFF -->
+    <div class="screen" id="m-screen-timeoff">
+      <div class="section-title">TIME OFF REQUESTS</div>
+      <div class="card-title">PENDING APPROVAL</div>
+      <div id="m-to-pending"></div>
+      <div class="card-title" style="margin-top:.9rem;">ALL REQUESTS</div>
+      <div id="m-to-all"></div>
+    </div>
+    <!-- MGR STAFF -->
+    <div class="screen" id="m-screen-staff">
+      <div class="section-title">STAFF</div>
+      <div class="tab-row">
+        <button class="tab active" id="m-tab-reg" onclick="staffTab('regular',this)">Guards</button>
+        <button class="tab" id="m-tab-bk" onclick="staffTab('backup',this)">Backup Guards</button>
+      </div>
+      <div id="m-staff-regular">
+        <div id="m-staff-reg-list"></div>
+        <button class="btn btn-ghost" onclick="openAddGuard('regular')" style="margin-top:.65rem">+ Add Lifeguard</button>
+      </div>
+      <div id="m-staff-backup" style="display:none">
+        <div class="info-box">Backup guards are only scheduled when no regular guards are available. They receive swap/give-away requests like everyone else.</div>
+        <div id="m-staff-bk-list"></div>
+        <button class="btn btn-ghost" onclick="openAddGuard('backup')" style="margin-top:.65rem">+ Add Backup Guard</button>
+      </div>
+    </div>
+    <!-- MGR SETTINGS -->
+    <div class="screen" id="m-screen-settings">
+      <div class="section-title">SETTINGS</div>
+      <div class="card">
+        <div class="card-title">PAY</div>
+        <div class="fg"><label>Hourly Rate (same for all guards)</label><input type="number" id="m-rate" value="15" step="0.5" min="8"/></div>
+        <button class="btn btn-primary" onclick="saveSettings()" style="margin-top:0">Save</button>
+      </div>
+      <div class="card">
+        <div class="card-title">GROUPME BOT</div>
+        <p style="color:var(--muted);font-size:.77rem;margin-bottom:.7rem;">dev.groupme.com → Bots → Create Bot → add to pool chat → paste Bot ID below.</p>
+        <div class="fg"><label>Bot ID</label><input type="text" id="m-gme" placeholder="Paste GroupMe Bot ID"/></div>
+        <div style="display:flex;gap:.5rem;margin-top:.45rem;">
+          <button class="btn btn-ghost btn-sm" onclick="testGroupMe()">Test</button>
+          <button class="btn btn-primary btn-sm" onclick="saveSettings()">Save</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">SHIFT REMINDERS</div>
+        <div class="fg"><label>Remind guards before each shift</label>
+          <select id="m-reminder">
+            <option value="0.5">30 minutes before</option>
+            <option value="1">1 hour before</option>
+            <option value="2" selected>2 hours before</option>
+            <option value="12">12 hours before</option>
+            <option value="24">24 hours before</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" onclick="saveSettings()" style="margin-top:0">Save</button>
+      </div>
+    </div>
+
+    <!-- MGR EVENT LOG -->
+    <div class="screen" id="m-screen-log">
+      <div class="section-title">EVENT LOG</div>
+      <div class="log-search">
+        <input type="text" id="log-search" placeholder="🔍 Search events…" oninput="renderEventLog()" style="margin-bottom:0;"/>
+      </div>
+      <div class="log-filters">
+        <button class="tab active" onclick="setLogFilter('all',this)">All</button>
+        <button class="tab" onclick="setLogFilter('swap',this)">Swaps</button>
+        <button class="tab" onclick="setLogFilter('clock',this)">Clock</button>
+        <button class="tab" onclick="setLogFilter('time_off',this)">Time Off</button>
+        <button class="tab" onclick="setLogFilter('shift',this)">Shifts</button>
+        <button class="tab" onclick="setLogFilter('sick',this)">Sick/Closure</button>
+      </div>
+      <input type="hidden" id="log-filter" value="all"/>
+      <div id="m-event-log"><p class="empty">No events yet.</p></div>
+      <button class="btn btn-ghost" onclick="exportEventLog()" style="margin-top:.7rem;width:100%">↓ Export Event Log (CSV)</button>
+    </div>
+
+    <!-- MGR PAYROLL -->
+    <div class="screen" id="m-screen-payroll">
+      <div class="section-title">PAYROLL</div>
+      <div class="pay-period-row">
+        <div class="fg"><label>From</label><input type="date" id="pay-from"/></div>
+        <div class="fg"><label>To</label><input type="date" id="pay-to"/></div>
+        <button class="btn btn-primary btn-sm" onclick="renderPayroll()" style="margin-bottom:0;white-space:nowrap;">Generate</button>
+      </div>
+      <div id="payroll-table-wrap"></div>
+      <div id="payroll-btns" style="display:none;margin-top:.6rem;">
+        <button class="btn btn-green" onclick="exportPayroll()" style="width:100%;margin-top:0">↓ Export Payroll CSV</button>
+      </div>
+    </div>
+
+  </div>
+  <nav class="bottom-nav">
+    <button class="nav-btn active" id="m-nav-home" onclick="mNav('home',this)"><div class="nav-icon">🏠</div><div class="nav-label">Home</div></button>
+    <button class="nav-btn" id="m-nav-calendar" onclick="mNav('calendar',this)"><div class="nav-icon">📅</div><div class="nav-label">Schedule</div></button>
+    <button class="nav-btn" id="m-nav-timeoff" onclick="mNav('timeoff',this)"><div class="nav-icon">🗓</div><div class="nav-label">Time Off</div></button>
+    <button class="nav-btn" id="m-nav-log" onclick="mNav('log',this)" style="position:relative"><div class="nav-icon">📋</div><div class="nav-label">Log</div><div class="notif-badge" id="m-notif-badge"></div></button>
+    <button class="nav-btn" id="m-nav-payroll" onclick="mNav('payroll',this)"><div class="nav-icon">💵</div><div class="nav-label">Payroll</div></button>
+    <button class="nav-btn" id="m-nav-staff" onclick="mNav('staff',this)"><div class="nav-icon">👥</div><div class="nav-label">Staff</div></button>
+  </nav>
+</div>
+
+<!-- ======= SHARED OVERLAYS ======= -->
+
+<!-- Day detail popup (shared, manager only adds to it) -->
+<div class="overlay center-ov" id="ov-day">
+  <div class="sheet">
+    <div class="sheet-hdr">
+      <div class="sheet-title" id="ov-day-title">—</div>
+      <button class="sheet-close" onclick="closeOv('ov-day')">✕</button>
+    </div>
+    <div id="ov-day-body"></div>
+    <div id="ov-day-mgr-btns" style="display:none;margin-top:.65rem;">
+      <button class="btn btn-primary" onclick="openAddShiftFromDay()" style="width:100%;margin-top:0">+ Add Shift This Day</button>
+      <div class="btn-row" style="margin-top:.5rem;">
+        <button class="btn btn-ghost btn-sm" onclick="copyDay()">📋 Copy Day</button>
+        <button class="btn btn-ghost btn-sm" id="paste-day-btn" onclick="pasteDay()" style="display:none">📌 Paste Here</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Sick modal -->
+<div class="overlay" id="ov-sick">
+  <div class="sheet">
+    <div class="sheet-hdr"><div class="sheet-title">🤒 CALL IN SICK?</div><button class="sheet-close" onclick="closeOv('ov-sick')">✕</button></div>
+    <p style="color:var(--muted);font-size:.83rem;margin-bottom:.9rem;">Sends an emergency alert to all guards and the manager via GroupMe. First to respond gets the shift.</p>
+    <div class="fg"><label>Which Shift?</label><select id="sick-sel"></select></div>
+    <div class="btn-row">
+      <button class="btn btn-coral" onclick="confirmSick()" style="margin-top:0">🚨 Send Alert</button>
+      <button class="btn btn-ghost" onclick="closeOv('ov-sick')" style="margin-top:0">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add/Edit shift modal -->
+<div class="overlay" id="ov-shift">
+  <div class="sheet">
+    <div class="sheet-hdr"><div class="sheet-title" id="ov-shift-title">ADD SHIFT</div><button class="sheet-close" onclick="closeOv('ov-shift')">✕</button></div>
+    <div class="fg"><label>Date</label><input type="date" id="sh-date"/></div>
+    <div class="row2">
+      <div class="fg"><label>Start</label><input type="time" id="sh-start" value="14:00"/></div>
+      <div class="fg"><label>End</label><input type="time" id="sh-end" value="20:00"/></div>
+    </div>
+    <div class="fg" style="margin-bottom:.4rem;">
+      <label>Suggested Arrival Time <span style="color:var(--muted);font-weight:400;font-size:.65rem;letter-spacing:0;text-transform:none;">(optional — shown to guards)</span></label>
+      <input type="time" id="sh-arrive" placeholder="e.g. 13:45"/>
+      <p style="color:var(--muted);font-size:.7rem;margin-top:.3rem;">Leave blank if arrival = shift start</p>
+    </div>
+    <div class="fg"><label>Shift Type</label>
+      <select id="sh-type" onchange="onTypeChange()">
+        <option value="regular">Regular Shift</option>
+        <option value="party">Party</option>
+        <option value="swim">Swim Meet</option>
+        <option value="custom">Custom…</option>
+      </select>
+    </div>
+    <div class="fg" id="sh-custom-wrap" style="display:none"><label>Custom Type Name</label><input type="text" id="sh-custom" placeholder="e.g. Swim Lessons"/></div>
+    <div class="fg"><label>Guards Required</label>
+      <select id="sh-req"><option value="1">1 guard</option><option value="2" selected>2 guards</option><option value="3">3 guards</option><option value="4">4 guards</option></select>
+    </div>
+    <div class="fg"><label>Notes (optional)</label><input type="text" id="sh-note" placeholder="e.g. Arrive 15 min early"/></div>
+    <div class="divider"></div>
+    <div class="card-title">ASSIGN GUARDS (optional)</div>
+    <div class="chips" id="sh-assign-chips"></div>
+    <div id="sh-to-warn" class="warn-box" style="display:none;margin-top:.55rem;"></div>
+    <div class="divider"></div>
+    <div class="card-title">REPEAT OPTIONS</div>
+    <div class="cb-row">
+      <input type="checkbox" id="sh-repeat" onchange="toggleRepeatDays()"/>
+      <label style="text-transform:none;letter-spacing:0;font-size:.84rem;">Repeat on selected days through Aug 31</label>
+    </div>
+    <div id="sh-repeat-days" style="display:none;margin-top:.4rem;">
+      <div style="display:flex;flex-wrap:wrap;gap:.3rem;">
+        <div class="chip on" data-day="0" onclick="toggleRepeatDay(this)">Sun</div>
+        <div class="chip on" data-day="1" onclick="toggleRepeatDay(this)">Mon</div>
+        <div class="chip on" data-day="2" onclick="toggleRepeatDay(this)">Tue</div>
+        <div class="chip on" data-day="3" onclick="toggleRepeatDay(this)">Wed</div>
+        <div class="chip on" data-day="4" onclick="toggleRepeatDay(this)">Thu</div>
+        <div class="chip on" data-day="5" onclick="toggleRepeatDay(this)">Fri</div>
+        <div class="chip on" data-day="6" onclick="toggleRepeatDay(this)">Sat</div>
+      </div>
+      <p style="color:var(--muted);font-size:.72rem;margin-top:.4rem;">Tap days to deselect. All selected = every day.</p>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="saveShift()" style="margin-top:0">Save</button>
+      <button class="btn btn-ghost" onclick="closeOv('ov-shift')" style="margin-top:0">Cancel</button>
+    </div>
+    <input type="hidden" id="sh-edit-id"/>
+  </div>
+</div>
+
+<!-- Auto-schedule modal -->
+<div class="overlay" id="ov-auto">
+  <div class="sheet">
+    <div class="sheet-hdr"><div class="sheet-title">⚡ AUTO-SCHEDULE</div><button class="sheet-close" onclick="closeOv('ov-auto')">✕</button></div>
+    <p style="color:var(--muted);font-size:.82rem;margin-bottom:.9rem;">Fills unfilled shifts evenly across guards, skipping approved time off. Backup guards only fill gaps regular guards can't cover.</p>
+    <div class="row2">
+      <div class="fg"><label>From</label><input type="date" id="auto-from" value="2026-06-01"/></div>
+      <div class="fg"><label>To</label><input type="date" id="auto-to" value="2026-08-31"/></div>
+    </div>
+    <div class="fg"><label>Limit to specific guards (blank = all regular)</label><div class="chips" id="auto-chips"></div></div>
+    <div id="auto-prog" style="display:none;"><div class="progress-bar"><div class="progress-fill" id="auto-fill"></div></div><p style="color:var(--muted);font-size:.78rem;text-align:center;">Distributing shifts…</p></div>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="auto-run-btn" onclick="runAutoSchedule()" style="margin-top:0">Run</button>
+      <button class="btn btn-ghost" onclick="closeOv('ov-auto')" style="margin-top:0">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Copy week modal -->
+<div class="overlay" id="ov-copyweek">
+  <div class="sheet">
+    <div class="sheet-hdr"><div class="sheet-title">📋 COPY WEEK</div><button class="sheet-close" onclick="closeOv('ov-copyweek')">✕</button></div>
+    <div class="fg"><label>Copy week starting (Sunday)</label><input type="date" id="cw-from"/></div>
+    <div class="fg"><label>Paste to week starting (Sunday)</label><input type="date" id="cw-to"/></div>
+    <div class="cb-row"><input type="checkbox" id="cw-assign" checked/><label style="text-transform:none;letter-spacing:0;font-size:.84rem;">Also copy guard assignments</label></div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="doCopyWeek()" style="margin-top:0">Copy & Paste</button>
+      <button class="btn btn-ghost" onclick="closeOv('ov-copyweek')" style="margin-top:0">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Swap request modal -->
+<div class="overlay" id="ov-swap">
+  <div class="sheet">
+    <div class="sheet-hdr"><div class="sheet-title" id="ov-swap-title">SWAP REQUEST</div><button class="sheet-close" onclick="closeOv('ov-swap')">✕</button></div>
+    <div id="ov-swap-body"></div>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="swap-submit-btn" onclick="sendSwapRequest()" style="margin-top:0">Send</button>
+      <button class="btn btn-ghost" onclick="closeOv('ov-swap')" style="margin-top:0">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Counter-offer modal -->
+<div class="overlay" id="ov-counter">
+  <div class="sheet">
+    <div class="sheet-hdr"><div class="sheet-title">COUNTER-OFFER</div><button class="sheet-close" onclick="closeOv('ov-counter')">✕</button></div>
+    <div id="counter-ctx" class="info-box"></div>
+    <div class="fg"><label>Pick one of your shifts to offer</label><select id="counter-sel"></select></div>
+    <div class="fg"><label>Message</label><input type="text" id="counter-msg" placeholder="e.g. This one works better for me"/></div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="sendCounter()" style="margin-top:0">Send Counter-Offer</button>
+      <button class="btn btn-ghost" onclick="closeOv('ov-counter')" style="margin-top:0">Cancel</button>
+    </div>
+    <input type="hidden" id="counter-swap-id"/>
+  </div>
+</div>
+
+<!-- Add guard modal -->
+<div class="overlay" id="ov-addguard">
+  <div class="sheet">
+    <div class="sheet-hdr"><div class="sheet-title" id="ag-title">ADD LIFEGUARD</div><button class="sheet-close" onclick="closeOv('ov-addguard')">✕</button></div>
+    <div class="row2">
+      <div class="fg"><label>First Name</label><input type="text" id="ag-first"/></div>
+      <div class="fg"><label>Last Name</label><input type="text" id="ag-last"/></div>
+    </div>
+    <div class="fg"><label>Phone</label><input type="tel" id="ag-phone" placeholder="(555) 000-0000"/></div>
+    <div class="fg"><label>Email (optional)</label><input type="email" id="ag-email"/></div>
+    <input type="hidden" id="ag-type" value="regular"/>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="saveGuard()" style="margin-top:0">Add</button>
+      <button class="btn btn-ghost" onclick="closeOv('ov-addguard')" style="margin-top:0">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Time off approve modal -->
+<div class="overlay" id="ov-toapprove">
+  <div class="sheet">
+    <div class="sheet-hdr"><div class="sheet-title">TIME OFF REQUEST</div><button class="sheet-close" onclick="closeOv('ov-toapprove')">✕</button></div>
+    <div id="toa-body"></div>
+    <div class="btn-row">
+      <button class="btn btn-green" onclick="doApproveTO(true)" style="margin-top:0">✓ Approve</button>
+      <button class="btn btn-danger" onclick="doApproveTO(false)" style="margin-top:0">✕ Deny</button>
+      <button class="btn btn-ghost" onclick="closeOv('ov-toapprove')" style="margin-top:0;flex:0.5">Cancel</button>
+    </div>
+    <input type="hidden" id="toa-id"/>
+  </div>
+</div>
+
+<!-- Pool closure modal -->
+<div class="overlay" id="ov-closure">
+  <div class="sheet">
+    <div class="sheet-hdr"><div class="sheet-title">⚠️ POOL CLOSURE</div><button class="sheet-close" onclick="closeOv('ov-closure')">✕</button></div>
+    <p style="color:var(--muted);font-size:.82rem;margin-bottom:.9rem;">Fill in the details below. This will be broadcast to all guards via GroupMe.</p>
+    <div class="fg"><label>Reason</label>
+      <select id="cl-reason">
+        <option value="">Select a reason…</option>
+        <option value="Chemical issue">Chemical issue</option>
+        <option value="Weather">Weather</option>
+        <option value="Mechanical issue">Mechanical issue</option>
+        <option value="Health & safety">Health &amp; safety</option>
+        <option value="Staff shortage">Staff shortage</option>
+        <option value="Other">Other</option>
+      </select>
+    </div>
+    <div class="fg"><label>Date</label><input type="date" id="cl-date"/></div>
+    <div class="row2">
+      <div class="fg"><label>Closure Starts</label><input type="time" id="cl-time-start"/></div>
+      <div class="fg"><label>Closure Ends</label><input type="time" id="cl-time-end"/></div>
+    </div>
+    <div class="fg"><label>Additional Message (optional)</label><input type="text" id="cl-msg" placeholder="e.g. Pool will reopen tomorrow at 10am"/></div>
+    <div class="btn-row">
+      <button class="btn btn-coral" onclick="sendClosure()" style="margin-top:0">⚠️ Send Alert</button>
+      <button class="btn btn-ghost" onclick="closeOv('ov-closure')" style="margin-top:0">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm dialog -->
+<div class="confirm-ov" id="ov-confirm">
+  <div class="confirm-box">
+    <h3 id="confirm-title">ARE YOU SURE?</h3>
+    <p id="confirm-msg">This cannot be undone.</p>
+    <div class="confirm-box-btns">
+      <button class="btn btn-danger" id="confirm-yes-btn" onclick="confirmYes()" style="margin-top:0">Yes, Delete</button>
+      <button class="btn btn-ghost" onclick="confirmNo()" style="margin-top:0">Cancel</button>
+    </div>
+  </div>
+</div>
+<!-- Firebase Compat SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+
+
+<script>
+'use strict';
+
+// ============================================================
+// FIREBASE CONFIG & INIT
+// ============================================================
+// Firebase loaded via compat SDK script tags above
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCB8Qp3ervQSIAF6VNjVbzhL0RuWkOaLm0",
+  authDomain: "waveguard-2026.firebaseapp.com",
+  databaseURL: "https://waveguard-2026-default-rtdb.firebaseio.com",
+  projectId: "waveguard-2026",
+  storageBucket: "waveguard-2026.firebasestorage.app",
+  messagingSenderId: "963608978073",
+  appId: "1:963608978073:web:10bd717c5cb43d981ace08"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+// ============================================================
+// CONSTANTS
+// ============================================================
+const SEASON       = [5,6,7]; // Jun=5, Jul=6, Aug=7, year 2026
+const MONTHS       = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DAY_HDRS     = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+const TYPE_LABELS  = {regular:'Regular',party:'Party',swim:'Swim Meet'};
+const TYPE_REQ     = {regular:2,party:3,swim:3,custom:2};
+const MAX_ROUNDS   = 3;
+const DB_ROOT      = 'waveguard2026';
+
+// ============================================================
+// LOCAL STATE (UI only — source of truth is Firebase)
+// ============================================================
+const L = {
+  user: null,           // logged-in user object
+  selectedDay: null,
+  copiedDay: null,
+  swapMode: 'swap',
+  counterSwapId: null,
+  autoSelectedGuards: [],
+  assignChipSelected: [],
+  clockedIn: false,
+  clockInTime: null,
+  unsubscribers: [],    // Firebase listeners to detach on logout
+};
+
+// Live data mirrors from Firebase
+let DATA = {
+  config:   { managerCode: null, guardCode: null },
+  guards:   {},   // { id: {first,last,phone,email,type,notifPrefs} }
+  shifts:   {},   // { id: {date,start,end,...} }
+  swaps:    {},   // { id: {type,from,to,...} }
+  timeOff:  {},   // { id: {guardId,from,to,reason,status} }
+  eventLog: {},   // { id: {ts,type,actor,msg} }
+  allTsLog: {},   // { id: {guardId,date,in,out,hrs} }
+  notifications:{},
+};
+
+// ============================================================
+// FIREBASE HELPERS
+// ============================================================
+function dbRef(path){ return db.ref(`${DB_ROOT}/${path}`); }
+
+async function dbSet(path, val){
+  try { await dbRef(path).set(val); return true; }
+  catch(e){ console.error('dbSet error',path,e); toast('Sync error: '+e.message,'err'); return false; }
+}
+
+async function dbUpdate(path, val){
+  try { await dbRef(path).update(val); return true; }
+  catch(e){ console.error('dbUpdate error',path,e); toast('Sync error: '+e.message,'err'); return false; }
+}
+
+async function dbRemove(path){
+  try { await dbRef(path).remove(); return true; }
+  catch(e){ console.error('dbRemove error',path,e); return false; }
+}
+
+async function dbGet(path){
+  try {
+    const snap = await dbRef(path).get();
+    return snap.exists() ? snap.val() : null;
+  } catch(e){ console.error('dbGet error',path,e); return null; }
+}
+
+function dbListen(path, cb){
+  const r = db.ref(`${DB_ROOT}/${path}`);
+  const handler = snap => cb(snap.exists() ? snap.val() : null);
+  r.on('value', handler);
+  L.unsubscribers.push(() => r.off('value', handler));
+}
+
+function dbPushKey(path){
+  return db.ref(`${DB_ROOT}/${path}`).push().key;
+}
+
+// ============================================================
+// SETUP LISTENERS — sync all Firebase data into DATA live
+// ============================================================
+function startListeners(){
+  // Each listener updates DATA and re-renders relevant UI
+  dbListen('config',   v => { if(v) DATA.config=v; });
+  dbListen('guards',   v => { DATA.guards=v||{}; renderStaff(); renderAutoChips(); buildAssignChips(L.assignChipSelected); });
+  dbListen('shifts',   v => { DATA.shifts=v||{}; refreshCals(); renderNextShift(); });
+  dbListen('swaps',    v => { DATA.swaps=v||{}; renderSwaps(); });
+  dbListen('timeOff',  v => { DATA.timeOff=v||{}; renderGuardTimeOff(); renderMgrTimeOff(); });
+  dbListen('eventLog', v => { DATA.eventLog=v||{}; renderEventLog(); updateNotifBadge(); });
+  dbListen('allTsLog', v => { DATA.allTsLog=v||{}; });
+  dbListen('notifications', v => { DATA.notifications=v||{}; updateNotifBadge(); });
+}
+
+function stopListeners(){
+  L.unsubscribers.forEach(u => u());
+  L.unsubscribers = [];
+}
+
+// ============================================================
+// SAFE DOM HELPERS
+// ============================================================
+function el(id){ return document.getElementById(id); }
+function set_el(id,prop,val){ const e=el(id); if(e) e[prop]=val; }
+function setText(id,v){ set_el(id,'textContent',v); }
+function setHTML(id,v){ set_el(id,'innerHTML',v); }
+function show(id,d='block'){ const e=el(id); if(e) e.style.display=d; }
+function hide(id){ const e=el(id); if(e) e.style.display='none'; }
+function addClass(id,c){ const e=el(id); if(e) e.classList.add(c); }
+function removeClass(id,c){ const e=el(id); if(e) e.classList.remove(c); }
+function getVal(id){ const e=el(id); return e?e.value:''; }
+function setVal(id,v){ set_el(id,'value',v); }
+function getCheck(id){ const e=el(id); return e?e.checked:false; }
+function setCheck(id,v){ const e=el(id); if(e) e.checked=v; }
+
+// ============================================================
+// UTILITIES
+// ============================================================
+function fmt12(t){
+  if(!t) return '';
+  const[h,m]=t.split(':').map(Number);
+  return`${h%12||12}:${String(m).padStart(2,'0')} ${h>=12?'PM':'AM'}`;
+}
+function fmtShort(ds){ return new Date(ds+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}); }
+function fmtLong(ds){  return new Date(ds+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}); }
+function guardsList(){ return Object.values(DATA.guards||{}); }
+function shiftsList(){ return Object.values(DATA.shifts||{}); }
+function swapsList(){  return Object.values(DATA.swaps||{}); }
+function toList(){     return Object.values(DATA.timeOff||{}); }
+function me(){ return L.user?.role==='guard' ? (DATA.guards||{})[L.user.id] : null; }
+function meObj(){ return {...(DATA.guards||{})[L.user?.id], id:L.user?.id}; }
+function gName(id){ const g=(DATA.guards||{})[id]; return g?`${g.first} ${g.last}`:'?'; }
+function isTO(gid,date){ return toList().some(t=>t.guardId===gid&&t.status==='approved'&&date>=t.from&&date<=t.to); }
+function newKey(){ return Date.now()+'_'+Math.random().toString(36).slice(2,7); }
+
+let _tt=null;
+function toast(msg,type='ok'){
+  const e=el('toast'); if(!e) return;
+  e.textContent=msg;
+  e.className='toast'+(type==='err'?' err':type==='warn'?' warn':'');
+  e.classList.add('show');
+  if(_tt) clearTimeout(_tt);
+  _tt=setTimeout(()=>e.classList.remove('show'),3000);
+}
+function openOv(id){ const e=el(id); if(e) e.classList.add('open'); }
+function closeOv(id){ const e=el(id); if(e) e.classList.remove('open'); }
+
+document.querySelectorAll('.overlay').forEach(o=>{
+  o.addEventListener('click',e=>{ if(e.target===o) o.classList.remove('open'); });
+});
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.hdr-user')) ['g-dd','m-dd'].forEach(id=>addClass(id,'hidden'));
+});
+
+// ============================================================
+// CONFIRM DIALOG
+// ============================================================
+let _confirmCb=null;
+function confirmAction(title,msg,yesLabel,cb){
+  setText('confirm-title',title);
+  setText('confirm-msg',msg);
+  const btn=el('confirm-yes-btn'); if(btn) btn.textContent=yesLabel||'Confirm';
+  _confirmCb=cb; openOv('ov-confirm');
+}
+function confirmYes(){ closeOv('ov-confirm'); if(_confirmCb) _confirmCb(); _confirmCb=null; }
+function confirmNo(){  closeOv('ov-confirm'); _confirmCb=null; }
+
+// ============================================================
+// SETUP PAGE (first-time manager onboarding)
+// ============================================================
+function showSetupPage(){
+  hide('login-screen'); hide('guard-app'); hide('mgr-app');
+  show('setup-screen','flex');
+}
+
+async function doSetup(){
+  const first  = getVal('setup-first').trim();
+  const last   = getVal('setup-last').trim();
+  const mgrCode= getVal('setup-mgr-code').trim();
+  const gCode  = getVal('setup-guard-code').trim();
+  if(!first||!last)     { toast('Enter your name','err'); return; }
+  if(mgrCode.length<4)  { toast('Manager code must be at least 4 characters','err'); return; }
+  if(gCode.length<4)    { toast('Guard code must be at least 4 characters','err'); return; }
+  if(mgrCode===gCode)   { toast('Manager and guard codes must be different','err'); return; }
+
+  const ok = await dbSet('config', { managerCode: mgrCode, guardCode: gCode,
+    managerFirst: first, managerLast: last, setupDone: true });
+  if(!ok) return;
+  toast('Team set up! Redirecting…');
+  setTimeout(()=>{ hide('setup-screen'); show('login-screen','flex'); }, 1200);
+}
+
+// ============================================================
+// LOGIN / LOGOUT
+// ============================================================
+function toggleCodeVis(btn){
+  const inp=el('li-code'); if(!inp) return;
+  inp.type=inp.type==='password'?'text':'password';
+  btn.textContent=inp.type==='password'?'👁':'🙈';
+}
+
+async function doLogin(){
+  const first=getVal('li-first').trim();
+  const last =getVal('li-last').trim();
+  const code =getVal('li-code').trim();
+  if(!first||!last){ toast('Enter your name','err'); return; }
+  if(!code){         toast('Enter the access code','err'); return; }
+
+  // Show loading state
+  const loginBtn=el('login-btn'); if(loginBtn){ loginBtn.disabled=true; loginBtn.textContent='Checking…'; }
+
+  // Fetch config from Firebase
+  const config = await dbGet('config');
+  if(loginBtn){ loginBtn.disabled=false; loginBtn.textContent='Dive In →'; }
+
+  if(!config || !config.setupDone){
+    // No team set up yet — show setup page
+    showSetupPage(); return;
+  }
+
+  DATA.config = config;
+
+  if(code===config.managerCode){
+    L.user = { id:'manager', first, last, role:'manager' };
+    startListeners();
+    mountManager(first, last);
+  } else if(code===config.guardCode){
+    // Find matching guard
+    const guards = await dbGet('guards') || {};
+    const match  = Object.entries(guards).find(([id,g])=>
+      g.first.toLowerCase()===first.toLowerCase() &&
+      g.last.toLowerCase()===last.toLowerCase()
+    );
+    if(!match){ toast('Name not found. Ask your manager to add you to the team.','err'); return; }
+    const [gid, gdata] = match;
+    L.user = { id: gid, first: gdata.first, last: gdata.last, role:'guard' };
+    DATA.guards = guards;
+    startListeners();
+    mountGuard(gdata.first, gdata.last);
+  } else {
+    toast('Wrong access code','err');
+  }
+}
+
+function mountGuard(first, last){
+  hide('login-screen'); hide('mgr-app');
+  show('guard-app','flex');
+  setText('g-hdr-name', first);
+  setText('g-greeting',`HEY, ${first.toUpperCase()}!`);
+  setText('g-date', new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}));
+  setText('g-dd-name',`${first} ${last}`);
+  const av=el('g-avatar'); if(av) av.textContent=first[0].toUpperCase();
+  // Seed a swap demo if this guard has shifts
+  renderNextShift();
+  renderTimesheet();
+  renderSwaps();
+  renderGuardTimeOff();
+  renderGuardCal();
+}
+
+function mountManager(first, last){
+  hide('login-screen'); hide('guard-app');
+  show('mgr-app','flex');
+  setText('m-hdr-name', first);
+  setText('m-greeting',`HEY, ${first.toUpperCase()}!`);
+  setText('m-date', new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}));
+  setText('m-dd-name',`${first} ${last}`);
+  const av=el('m-avatar'); if(av) av.textContent=first[0].toUpperCase();
+  renderMgrCal();
+  renderMgrTimeOff();
+  renderStaff();
+  renderAutoChips();
+  updateNotifBadge();
+}
+
+function doLogout(){
+  stopListeners();
+  L.user=null; L.clockedIn=false; L.clockInTime=null; L.copiedDay=null;
+  DATA={ config:{}, guards:{}, shifts:{}, swaps:{}, timeOff:{}, eventLog:{}, allTsLog:{}, notifications:{} };
+  hide('guard-app'); hide('mgr-app'); hide('setup-screen');
+  setVal('li-code','');
+  show('login-screen','flex');
+}
+
+function toggleDD(id){ const e=el(id); if(e) e.classList.toggle('hidden'); }
+
+// ============================================================
+// NAVIGATION
+// ============================================================
+function gNav(screen, btn){
+  ['home','calendar','swaps','timesheet','timeoff'].forEach(s=>{
+    removeClass('g-screen-'+s,'active'); removeClass('g-nav-'+s,'active');
+  });
+  addClass('g-screen-'+screen,'active');
+  if(btn) btn.classList.add('active'); else addClass('g-nav-'+screen,'active');
+  if(screen==='swaps')   renderSwaps();
+  if(screen==='timeoff') { renderGuardTimeOff(); loadNotifPrefs(); }
+}
+function mNav(screen, btn){
+  ['home','calendar','timeoff','staff','settings','log','payroll'].forEach(s=>{
+    removeClass('m-screen-'+s,'active'); removeClass('m-nav-'+s,'active');
+  });
+  addClass('m-screen-'+screen,'active');
+  if(btn) btn.classList.add('active'); else addClass('m-nav-'+screen,'active');
+  if(screen==='timeoff') renderMgrTimeOff();
+  if(screen==='staff')   renderStaff();
+  if(screen==='log')     { renderEventLog(); markNotifsRead(); }
+  if(screen==='payroll') initPayroll();
+}
+
+// ============================================================
+// CALENDAR
+// ============================================================
+function renderGuardCal(){
+  const c=el('g-season-cal'); if(!c) return;
+  c.innerHTML=SEASON.map(m=>buildMonth(2026,m,false)).join('');
+}
+function renderMgrCal(){
+  const c=el('m-season-cal'); if(!c) return;
+  c.innerHTML=SEASON.map(m=>buildMonth(2026,m,true)).join('');
+}
+function refreshCals(){ renderGuardCal(); renderMgrCal(); }
+
+function buildMonth(year,month,isMgr){
+  const first=new Date(year,month,1).getDay();
+  const days =new Date(year,month+1,0).getDate();
+  const today =new Date();
+  let cells='';
+  for(let i=0;i<first;i++) cells+=`<div class="cal-cell blank"></div>`;
+  for(let d=1;d<=days;d++){
+    const ds=`${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dayShifts=shiftsList().filter(s=>s.date===ds);
+    const isToday=today.getDate()===d&&today.getMonth()===month&&today.getFullYear()===year;
+    const isSel=L.selectedDay===ds;
+    const hasShift=dayShifts.length>0;
+    const under=dayShifts.some(s=>(s.assigned||[]).length<s.required);
+    let typeClass='';
+    if(dayShifts.length===1) typeClass=' type-'+dayShifts[0].type;
+    else if(dayShifts.length>1) typeClass=' multi-type';
+    let cls='cal-cell'+(isToday?' today':'')+(isSel?' selected':'')+(hasShift?' has-shift'+typeClass:'')+(under?' understaffed':'');
+    cells+=`<div class="${cls}" onclick="openDayPopup('${ds}',${isMgr})">${d}</div>`;
+  }
+  return`<div class="cal-month"><div class="cal-month-name">${MONTHS[month].toUpperCase()} ${year}</div>
+    <div class="cal-grid">${DAY_HDRS.map(h=>`<div class="cal-hdr">${h}</div>`).join('')}${cells}</div></div>`;
+}
+
+// ============================================================
+// DAY POPUP
+// ============================================================
+function openDayPopup(ds, isMgr){
+  L.selectedDay=ds; refreshCals();
+  const shifts=shiftsList().filter(s=>s.date===ds);
+  setText('ov-day-title', fmtLong(ds));
+  let body=shifts.length ? shifts.map(sh=>shiftCardHTML(sh,isMgr,ds)).join('') : '<p class="empty">No shifts scheduled.</p>';
+  setHTML('ov-day-body', body);
+  const mgrBtns=el('ov-day-mgr-btns');
+  if(mgrBtns) mgrBtns.style.display=isMgr?'block':'none';
+  if(isMgr){
+    const pb=el('paste-day-btn');
+    if(pb){ pb.style.display=L.copiedDay?'inline-block':'none';
+      if(L.copiedDay) pb.textContent=`📌 Paste from ${fmtShort(L.copiedDay)}`; }
+  }
+  openOv('ov-day');
+}
+
+function shiftCardHTML(sh, isMgr, ds){
+  const names=(sh.assigned||[]).map(id=>gName(id)).join(', ');
+  const under=(sh.assigned||[]).length<sh.required;
+  const tLabel=sh.type==='custom'?sh.customType:(TYPE_LABELS[sh.type]||sh.type);
+  const tCls='tb-'+(sh.type==='custom'?'custom':sh.type);
+  let cardCls='shift-card'+(sh.type==='party'?' party-card':sh.type==='swim'?' swim-card':under?' under-card':'');
+  let h=`<div class="${cardCls}">
+    <span class="type-badge ${tCls}">${tLabel}</span>
+    <div class="s-time">${fmt12(sh.start)} – ${fmt12(sh.end)}</div>
+    <div class="s-guards">${names||'No one assigned'} &nbsp;(${(sh.assigned||[]).length}/${sh.required})</div>`;
+  if(sh.arriveTime) h+=`<div class="s-note" style="color:var(--yellow)">⏰ Arrive by ${fmt12(sh.arriveTime)}</div>`;
+  if(sh.note)       h+=`<div class="s-note">📝 ${sh.note}</div>`;
+  if(under)         h+=`<div class="s-warn">⚠️ Needs ${sh.required-(sh.assigned||[]).length} more</div>`;
+  if(isMgr) h+=`<div class="s-actions">
+    <button class="btn btn-sm btn-ghost" onclick="editShift('${sh.id}')">✏️ Edit</button>
+    <button class="btn btn-sm btn-danger" onclick="delShift('${sh.id}')">🗑 Delete</button>
+  </div>`;
+  h+='</div>';
+  return h;
+}
+
+function copyDay(){
+  L.copiedDay=L.selectedDay;
+  toast(`Copied ${fmtShort(L.selectedDay)} — open another day to paste`,'warn');
+  closeOv('ov-day');
+}
+async function pasteDay(){
+  if(!L.copiedDay||!L.selectedDay) return;
+  const src=shiftsList().filter(s=>s.date===L.copiedDay);
+  if(!src.length){ toast('No shifts to paste','err'); return; }
+  const existing=shiftsList().filter(s=>s.date===L.selectedDay);
+  let added=0;
+  for(const sh of src){
+    if(!existing.find(s=>s.start===sh.start)){
+      const id=newKey();
+      await dbSet(`shifts/${id}`,{...sh, id, date:L.selectedDay, assigned:sh.assigned||[]});
+      added++;
+    }
+  }
+  refreshCals(); openDayPopup(L.selectedDay,true);
+  toast(`Pasted ${added} shift(s) from ${fmtShort(L.copiedDay)}`);
+}
+
+// ============================================================
+// SHIFT ADD / EDIT
+// ============================================================
+function openAddShiftFromDay(){ openAddShift(L.selectedDay); closeOv('ov-day'); }
+function openAddShift(date){
+  setText('ov-shift-title','ADD SHIFT');
+  setVal('sh-date', date||''); setVal('sh-start','14:00'); setVal('sh-end','20:00');
+  setVal('sh-arrive','');
+  setVal('sh-type','regular'); const cw=el('sh-custom-wrap'); if(cw) cw.style.display='none';
+  setVal('sh-custom',''); setVal('sh-req','2'); setVal('sh-note','');
+  setCheck('sh-repeat',false); hide('sh-repeat-days');
+  setVal('sh-edit-id','');
+  buildAssignChips([]); hide('sh-to-warn');
+  openOv('ov-shift');
+}
+
+function editShift(id){
+  const sh=(DATA.shifts||{})[id]; if(!sh) return;
+  setText('ov-shift-title','EDIT SHIFT');
+  setVal('sh-date',sh.date); setVal('sh-start',sh.start); setVal('sh-end',sh.end);
+  setVal('sh-arrive',sh.arriveTime||'');
+  setVal('sh-type',sh.type);
+  const cw=el('sh-custom-wrap'); if(cw) cw.style.display=sh.type==='custom'?'block':'none';
+  setVal('sh-custom',sh.customType||''); setVal('sh-req',String(sh.required)); setVal('sh-note',sh.note||'');
+  setCheck('sh-repeat',false); hide('sh-repeat-days');
+  setVal('sh-edit-id',id);
+  buildAssignChips(sh.assigned||[]); hide('sh-to-warn');
+  closeOv('ov-day'); openOv('ov-shift');
+}
+
+function onTypeChange(){
+  const t=getVal('sh-type');
+  const cw=el('sh-custom-wrap'); if(cw) cw.style.display=t==='custom'?'block':'none';
+  if(TYPE_REQ[t]) setVal('sh-req',String(TYPE_REQ[t]));
+}
+
+function buildAssignChips(current){
+  L.assignChipSelected=[...current];
+  const c=el('sh-assign-chips'); if(!c) return;
+  c.innerHTML=guardsList().map(g=>{
+    const on=L.assignChipSelected.includes(g.id);
+    return`<div class="chip${on?' on':''}" onclick="toggleAssignChip('${g.id}',this)">${g.first} ${g.last}${g.type==='backup'?' ⭐':''}</div>`;
+  }).join('');
+}
+
+function toggleAssignChip(id, chipEl){
+  const date=getVal('sh-date');
+  const idx=L.assignChipSelected.indexOf(id);
+  if(idx>=0){ L.assignChipSelected.splice(idx,1); chipEl.classList.remove('on'); }
+  else {
+    if(date&&isTO(id,date)){
+      const w=el('sh-to-warn');
+      if(w){ w.textContent=`⚠️ ${gName(id)} has approved time off on ${fmtShort(date)}. Schedule anyway?`; w.style.display='block'; }
+    }
+    L.assignChipSelected.push(id); chipEl.classList.add('on');
+  }
+  if(!L.assignChipSelected.some(gid=>date&&isTO(gid,date))) hide('sh-to-warn');
+}
+
+async function saveShift(){
+  const date=getVal('sh-date'), start=getVal('sh-start'), end=getVal('sh-end');
+  const arriveTime=getVal('sh-arrive');
+  const type=getVal('sh-type'), customType=getVal('sh-custom').trim();
+  const required=parseInt(getVal('sh-req')), note=getVal('sh-note').trim();
+  const repeat=getCheck('sh-repeat'), editId=getVal('sh-edit-id');
+  if(!date||!start||!end){ toast('Fill in date and times','err'); return; }
+  if(end<=start){ toast('End time must be after start time','err'); return; }
+  if(type==='custom'&&!customType){ toast('Enter a custom type name','err'); return; }
+
+  const shiftData = { date,start,end,arriveTime,type,customType,required,note,assigned:L.assignChipSelected };
+
+  if(editId){
+    await dbUpdate(`shifts/${editId}`, shiftData);
+    logEvent('shift_edited','Manager',`Shift edited: ${date} ${fmt12(start)}–${fmt12(end)}`,{});
+    toast('Shift updated!');
+  } else if(repeat){
+    const dayChips=document.querySelectorAll('#sh-repeat-days [data-day]');
+    const activeDays=new Set([...dayChips].filter(c=>c.classList.contains('on')).map(c=>parseInt(c.dataset.day)));
+    if(!activeDays.size){ toast('Select at least one repeat day','err'); return; }
+    const endDate=new Date('2026-08-31'); let cur=new Date(date); let added=0;
+    while(cur<=endDate){
+      if(activeDays.has(cur.getDay())){
+        const ds=cur.toISOString().slice(0,10);
+        if(!shiftsList().find(s=>s.date===ds&&s.start===start)){
+          const id=newKey();
+          await dbSet(`shifts/${id}`,{...shiftData,id,date:ds,assigned:[]});
+          added++;
+        }
+      }
+      cur.setDate(cur.getDate()+1);
+    }
+    logEvent('shift_added','Manager',`${added} repeat shifts created`,{});
+    toast(`${added} shifts created!`);
+  } else {
+    const id=newKey();
+    await dbSet(`shifts/${id}`,{...shiftData,id});
+    logEvent('shift_added','Manager',`Shift added: ${type==='custom'?customType:type} on ${date}, ${fmt12(start)}–${fmt12(end)}${arriveTime?' (arrive '+fmt12(arriveTime)+')':''}`,{});
+    toast('Shift added!');
+  }
+  closeOv('ov-shift');
+}
+
+async function delShift(id){
+  const sh=(DATA.shifts||{})[id];
+  confirmAction('DELETE SHIFT','This shift will be permanently removed.','Delete Shift', async ()=>{
+    await dbRemove(`shifts/${id}`);
+    logEvent('shift_deleted','Manager',`Shift deleted: ${sh?sh.date+' '+fmt12(sh.start)+'–'+fmt12(sh.end):''}`,{});
+    closeOv('ov-day'); toast('Shift deleted');
+  });
+}
+
+function toggleRepeatDays(){ const p=el('sh-repeat-days'); if(p) p.style.display=getCheck('sh-repeat')?'block':'none'; }
+function toggleRepeatDay(chip){ chip.classList.toggle('on'); }
+
+// ============================================================
+// EXCEL IMPORT
+// ============================================================
+function openExcelImport(){ openOv('ov-excel'); }
+async function handleExcelUpload(evt){
+  const file=evt.target.files[0]; if(!file) return;
+  // Load SheetJS
+  if(!window.XLSX){
+    await new Promise((res,rej)=>{
+      const s=document.createElement('script');
+      s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      s.onload=res; s.onerror=rej; document.head.appendChild(s);
+    });
+  }
+  const buf=await file.arrayBuffer();
+  const wb=window.XLSX.read(buf,{type:'array'});
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  const rows=window.XLSX.utils.sheet_to_json(ws,{raw:false});
+  let added=0, errors=[];
+  for(const row of rows){
+    const date=(row['Date']||'').trim();
+    const start=(row['Start']||'').trim();
+    const end=(row['End']||'').trim();
+    const type=(row['Type']||'regular').trim().toLowerCase();
+    const required=parseInt(row['Guards Required']||'2');
+    const arriveTime=(row['Arrive By']||'').trim();
+    const note=(row['Notes']||'').trim();
+    if(!date||!start||!end){ errors.push(`Row missing date/start/end`); continue; }
+    if(end<=start){ errors.push(`${date}: end before start`); continue; }
+    const id=newKey();
+    const mappedType=type.includes('party')?'party':type.includes('swim')?'swim':type.includes('custom')?'custom':'regular';
+    await dbSet(`shifts/${id}`,{id,date,start,end,arriveTime,type:mappedType,customType:type,required:isNaN(required)?2:required,note,assigned:[]});
+    added++;
+  }
+  closeOv('ov-excel');
+  logEvent('shift_added','Manager',`${added} shifts imported from Excel`,{});
+  toast(added>0?`✓ ${added} shifts imported${errors.length?' ('+errors.length+' skipped)':''}`:'No valid shifts found','warn');
+  if(errors.length) console.warn('Excel import errors:', errors);
+}
+
+function downloadExcelTemplate(){
+  if(!window.XLSX){
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload=buildTemplate; document.head.appendChild(s);
+  } else { buildTemplate(); }
+}
+function buildTemplate(){
+  const ws=window.XLSX.utils.aoa_to_sheet([
+    ['Date','Start','End','Type','Guards Required','Arrive By','Notes'],
+    ['2026-06-01','14:00','20:00','Regular','2','',''],
+    ['2026-06-02','13:00','19:00','Party','3','12:30','Birthday party'],
+    ['2026-06-03','10:00','14:00','Swim Meet','3','09:45',''],
+  ]);
+  const wb=window.XLSX.utils.book_new();
+  window.XLSX.utils.book_append_sheet(wb,ws,'Shifts');
+  window.XLSX.writeFile(wb,'waveguard_shift_template.xlsx');
+  toast('Template downloaded!');
+}
+
+// ============================================================
+// AUTO SCHEDULE
+// ============================================================
+function renderAutoChips(){
+  const c=el('auto-chips'); if(!c) return;
+  c.innerHTML=guardsList().map(g=>`<div class="chip${L.autoSelectedGuards.includes(g.id)?' on':''}" onclick="toggleAutoChip('${g.id}',this)">${g.first}${g.type==='backup'?' ⭐':''}</div>`).join('');
+}
+function toggleAutoChip(id,chip){ const i=L.autoSelectedGuards.indexOf(id); i>=0?L.autoSelectedGuards.splice(i,1):L.autoSelectedGuards.push(id); chip.classList.toggle('on',L.autoSelectedGuards.includes(id)); }
+function openAutoSchedule(){ renderAutoChips(); openOv('ov-auto'); }
+
+async function runAutoSchedule(){
+  const from=getVal('auto-from'), to=getVal('auto-to');
+  if(!from||!to){ toast('Set date range','err'); return; }
+  const prog=el('auto-prog'); if(prog) prog.style.display='block';
+  const runBtn=el('auto-run-btn'); if(runBtn) runBtn.disabled=true;
+  setTimeout(()=>{ const f=el('auto-fill'); if(f) f.style.width='100%'; },80);
+
+  const regular=guardsList().filter(g=>g.type==='regular');
+  const backup =guardsList().filter(g=>g.type==='backup');
+  const pool   =L.autoSelectedGuards.length>0?guardsList().filter(g=>L.autoSelectedGuards.includes(g.id)):regular;
+  const counts={}; guardsList().forEach(g=>counts[g.id]=0);
+
+  const updates={};
+  for(const [sid,sh] of Object.entries(DATA.shifts||{})){
+    if(sh.date<from||sh.date>to) continue;
+    const assigned=[...(sh.assigned||[])];
+    if(assigned.length>=sh.required) continue;
+    const need=sh.required-assigned.length;
+    const avail=pool.filter(g=>!assigned.includes(g.id)&&!isTO(g.id,sh.date)).sort((a,b)=>(counts[a.id]||0)-(counts[b.id]||0));
+    let filled=0;
+    for(const g of avail){ if(filled>=need) break; assigned.push(g.id); counts[g.id]=(counts[g.id]||0)+1; filled++; }
+    if(assigned.length<sh.required){
+      const bk=backup.filter(g=>!assigned.includes(g.id)&&!isTO(g.id,sh.date)).sort((a,b)=>(counts[a.id]||0)-(counts[b.id]||0));
+      for(const g of bk){ if(assigned.length>=sh.required) break; assigned.push(g.id); counts[g.id]=(counts[g.id]||0)+1; }
+    }
+    updates[`shifts/${sid}/assigned`]=assigned;
+  }
+  if(Object.keys(updates).length>0) await db.ref(DB_ROOT).update(updates);
+
+  setTimeout(()=>{
+    if(prog) prog.style.display='none';
+    const fill=el('auto-fill'); if(fill) fill.style.width='0';
+    if(runBtn) runBtn.disabled=false;
+    L.autoSelectedGuards=[];
+    logEvent('auto_schedule','Manager','Auto-schedule run for season',{});
+    toast('Season scheduled!');
+  },2300);
+  closeOv('ov-auto');
+}
+
+// ============================================================
+// COPY WEEK
+// ============================================================
+function openCopyWeek(){ openOv('ov-copyweek'); }
+async function doCopyWeek(){
+  const from=getVal('cw-from'), to=getVal('cw-to'), copyAssign=getCheck('cw-assign');
+  if(!from||!to){ toast('Set both dates','err'); return; }
+  const fSun=new Date(from+'T12:00:00'), tSun=new Date(to+'T12:00:00');
+  let added=0;
+  for(let off=0;off<7;off++){
+    const sd=new Date(fSun); sd.setDate(fSun.getDate()+off);
+    const td=new Date(tSun); td.setDate(tSun.getDate()+off);
+    const sds=sd.toISOString().slice(0,10), tds=td.toISOString().slice(0,10);
+    const srcShifts=shiftsList().filter(s=>s.date===sds);
+    for(const sh of srcShifts){
+      if(!shiftsList().find(s=>s.date===tds&&s.start===sh.start)){
+        const id=newKey();
+        await dbSet(`shifts/${id}`,{...sh,id,date:tds,assigned:copyAssign?sh.assigned||[]:[]});
+        added++;
+      }
+    }
+  }
+  closeOv('ov-copyweek'); toast(`Copied week: ${added} shifts pasted`);
+}
+
+// ============================================================
+// NEXT SHIFT
+// ============================================================
+function renderNextShift(){
+  const guard=me(); if(!guard) return;
+  const nDate=el('g-next-date'), nTime=el('g-next-time');
+  if(!nDate||!nTime) return;
+  const today=new Date().toISOString().slice(0,10);
+  const up=shiftsList().filter(s=>s.date>=today&&(s.assigned||[]).includes(L.user.id)).sort((a,b)=>a.date.localeCompare(b.date))[0];
+  nDate.textContent=up?fmtShort(up.date):'No upcoming shifts';
+  nTime.textContent=up?`${fmt12(up.start)} – ${fmt12(up.end)}`+(up.arriveTime?` · Arrive by ${fmt12(up.arriveTime)}`:''): '';
+}
+
+// ============================================================
+// CLOCK IN/OUT
+// ============================================================
+function clockIn(){
+  if(L.clockedIn) return;
+  L.clockedIn=true; L.clockInTime=new Date();
+  hide('g-btn-ci'); show('g-btn-co');
+  const sb=el('g-clock-status'); if(sb) sb.className='status-bar sb-in';
+  const txt=el('g-clock-txt'); if(txt) txt.textContent=`Clocked in at ${L.clockInTime.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`;
+  const dot=sb?.querySelector('.dot'); if(dot) dot.classList.add('pulse');
+  logEvent('clock_in',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} clocked in`,{});
+  toast('Clocked in ✓');
+}
+async function clockOut(){
+  if(!L.clockedIn) return;
+  const out=new Date(), hrs=parseFloat(((out-L.clockInTime)/3600000).toFixed(2));
+  const inStr=L.clockInTime.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  const outStr=out.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  const date=new Date().toISOString().slice(0,10);
+  const tsId=newKey();
+  await dbSet(`allTsLog/${tsId}`,{guardId:L.user.id,date,in:inStr,out:outStr,hrs});
+  L.clockedIn=false; L.clockInTime=null;
+  show('g-btn-ci'); hide('g-btn-co');
+  const sb=el('g-clock-status'); if(sb) sb.className='status-bar sb-out';
+  const txt=el('g-clock-txt'); if(txt) txt.textContent='Not clocked in';
+  const dot=sb?.querySelector('.dot'); if(dot) dot.classList.remove('pulse');
+  logEvent('clock_out',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} clocked out after ${hrs} hrs`,{hrs});
+  renderTimesheet();
+  toast(`Clocked out — ${hrs} hrs logged`);
+}
+
+// ============================================================
+// TIMESHEET (guard's own)
+// ============================================================
+function renderTimesheet(){
+  const hrsEl=el('g-total-hrs'), payEl=el('g-pay-est'), logEl=el('g-ts-log');
+  if(!hrsEl||!payEl||!logEl) return;
+  const myLog=Object.values(DATA.allTsLog||{}).filter(e=>e.guardId===L.user?.id);
+  const total=myLog.reduce((s,r)=>s+r.hrs,0);
+  const rate=(DATA.config?.hourlyRate)||15;
+  hrsEl.textContent=total.toFixed(1);
+  payEl.textContent=`Est. $${(total*rate).toFixed(2)}`;
+  logEl.innerHTML=myLog.length
+    ?[...myLog].sort((a,b)=>b.date.localeCompare(a.date)).map(e=>`<div class="ts-row"><div><div class="ts-date">${e.date}</div><div style="font-size:.71rem;color:var(--muted)">${e.in} → ${e.out}</div></div><div class="ts-hrs">${e.hrs.toFixed(2)} hrs</div></div>`).join('')
+    :'<p class="empty">No entries yet.</p>';
+}
+
+// ============================================================
+// SICK / CLOSURE
+// ============================================================
+function openSickModal(){
+  const today=new Date().toISOString().slice(0,10);
+  const mine=shiftsList().filter(s=>s.date===today&&(s.assigned||[]).includes(L.user?.id));
+  const sel=el('sick-sel'); if(!sel) return;
+  sel.innerHTML=mine.length?mine.map(s=>`<option value="${s.id}">Today ${fmt12(s.start)}–${fmt12(s.end)}</option>`).join(''):'<option>No shifts today</option>';
+  openOv('ov-sick');
+}
+function confirmSick(){
+  const shiftId=getVal('sick-sel');
+  const shift=(DATA.shifts||{})[shiftId];
+  logEvent('sick_alert',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} called in sick${shift?' for '+fmt12(shift.start)+'–'+fmt12(shift.end)+' shift':''}`,{shiftId});
+  closeOv('ov-sick'); toast('🚨 Emergency alert sent!');
+}
+function openClosureModal(){ openOv('ov-closure'); }
+function sendClosure(){
+  const reason=getVal('cl-reason').trim(), msg=getVal('cl-msg').trim();
+  const date=getVal('cl-date'), tS=getVal('cl-time-start'), tE=getVal('cl-time-end');
+  if(!reason){ toast('Enter a reason','err'); return; }
+  if(!date){ toast('Enter a date','err'); return; }
+  if(!tS||!tE){ toast('Enter start and end times','err'); return; }
+  if(tE<=tS){ toast('End must be after start','err'); return; }
+  logEvent('closure_alert','Manager',`Pool closure: ${reason} on ${date} ${fmt12(tS)}–${fmt12(tE)}${msg?' — '+msg:''}`,{});
+  closeOv('ov-closure');
+  setVal('cl-reason',''); setVal('cl-msg',''); setVal('cl-date',''); setVal('cl-time-start',''); setVal('cl-time-end','');
+  toast('⚠️ Pool closure alert sent via GroupMe!');
+}
+
+// ============================================================
+// SWAPS
+// ============================================================
+function openSwapModal(mode){
+  L.swapMode=mode;
+  const isSwap=mode==='swap';
+  setText('ov-swap-title', isSwap?'REQUEST SWAP':'GIVE SHIFT AWAY');
+  const today=new Date().toISOString().slice(0,10);
+  const myShifts=shiftsList().filter(s=>s.date>=today&&(s.assigned||[]).includes(L.user?.id));
+  const opts=myShifts.length?myShifts.map(s=>`<option value="${s.id}">${fmtShort(s.date)} · ${fmt12(s.start)}–${fmt12(s.end)}</option>`).join(''):'<option value="">No upcoming shifts</option>';
+  let html=`<div class="fg"><label>Shift to ${isSwap?'Swap':'Give Away'}</label><select id="sw-myshift">${opts}</select></div>`;
+  if(isSwap){
+    const others=guardsList().filter(g=>g.id!==L.user?.id);
+    html+=`<div class="fg"><label>Swap with</label><select id="sw-with">${others.map(g=>`<option value="${g.id}">${g.first} ${g.last}${g.type==='backup'?' ⭐':''}</option>`).join('')}</select></div>`;
+    html+=`<div class="info-box">They'll pick one of their shifts to offer you back.</div>`;
+  } else {
+    html+=`<div class="info-box">Broadcasts to all guards. First to accept wins.</div>`;
+  }
+  html+=`<div class="fg"><label>Message (optional)</label><input type="text" id="sw-msg" placeholder="e.g. Doctor appointment"/></div>`;
+  setHTML('ov-swap-body', html);
+  const btn=el('swap-submit-btn'); if(btn) btn.textContent=isSwap?'Send Swap Request':'Broadcast to All';
+  openOv('ov-swap');
+}
+
+async function sendSwapRequest(){
+  const shiftId=getVal('sw-myshift'), msg=getVal('sw-msg');
+  if(!shiftId){ toast('No shift selected','err'); return; }
+  const id=newKey();
+  if(L.swapMode==='swap'){
+    const toId=getVal('sw-with'); if(!toId){ toast('Select a guard','err'); return; }
+    await dbSet(`swaps/${id}`,{id,type:'swap',from:L.user.id,to:toId,shiftId,offerShiftId:null,message:msg,status:'pending',rounds:0});
+    logEvent('swap_request',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} requested a swap with ${gName(toId)}`,{});
+    toast('Swap request sent!');
+  } else {
+    await dbSet(`swaps/${id}`,{id,type:'give',from:L.user.id,to:null,shiftId,offerShiftId:null,message:msg,status:'broadcast',rounds:0});
+    logEvent('give_request',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} is giving away a shift`,{});
+    toast('Broadcast sent!');
+  }
+  closeOv('ov-swap');
+}
+
+function renderSwaps(){
+  const inEl=el('g-swaps-in'), outEl=el('g-swaps-out');
+  if(!inEl||!outEl) return;
+  const myId=L.user?.id;
+  const incoming=swapsList().filter(r=>(r.type==='give'&&r.status==='broadcast'&&r.from!==myId)||(r.to===myId&&['pending','countered'].includes(r.status)));
+  const outgoing=swapsList().filter(r=>r.from===myId&&['pending','broadcast','countered'].includes(r.status));
+  inEl.innerHTML=incoming.length?incoming.map(r=>swapCardHTML(r,'in',myId)).join(''):'<p class="empty">No incoming requests.</p>';
+  outEl.innerHTML=outgoing.length?outgoing.map(r=>swapCardHTML(r,'out',myId)).join(''):'<p class="empty">No outgoing requests.</p>';
+}
+
+function swapCardHTML(r,dir,myId){
+  const fromG=(DATA.guards||{})[r.from];
+  const shift=(DATA.shifts||{})[r.shiftId];
+  const offer=r.offerShiftId?(DATA.shifts||{})[r.offerShiftId]:null;
+  const rl=MAX_ROUNDS-r.rounds;
+  let badge=r.type==='give'?`<span class="badge b-yellow">📢 Give Away</span>`:r.status==='countered'?`<span class="badge b-coral">↩ Counter</span>`:`<span class="badge b-blue">🔄 Swap</span>`;
+  let h=`<div class="swap-card">${badge}`;
+  if(dir==='in'){
+    h+=`<div class="sw-head">${r.type==='give'?fromG?.first+' is giving away a shift':fromG?.first+' wants to swap'}</div>`;
+    h+=`<div class="sw-detail">Shift: ${shift?`${fmtShort(shift.date)} · ${fmt12(shift.start)}–${fmt12(shift.end)}`:'—'}</div>`;
+    if(offer) h+=`<div class="sw-detail">Offering: ${fmtShort(offer.date)} · ${fmt12(offer.start)}–${fmt12(offer.end)}</div>`;
+    if(r.message) h+=`<div class="sw-msg">"${r.message}"</div>`;
+    h+=`<div class="sw-actions">`;
+    if(r.type==='give') h+=`<button class="btn btn-sm btn-green" onclick="acceptGive('${r.id}')">✓ Accept</button>`;
+    else if(r.status==='pending') h+=`<button class="btn btn-sm btn-primary" onclick="openCounter('${r.id}')">Offer a Shift Back</button>`;
+    else if(r.status==='countered'&&r.to===myId){ h+=`<button class="btn btn-sm btn-green" onclick="acceptCounter('${r.id}')">✓ Accept Offer</button>`; if(rl>0) h+=`<button class="btn btn-sm btn-ghost" onclick="openCounter('${r.id}')">↩ Counter Again</button>`; }
+    h+=`<button class="btn btn-sm btn-danger" onclick="declineSwap('${r.id}')">✕ Decline</button></div>`;
+    if(r.rounds>0) h+=`<div class="sw-rounds">Round ${r.rounds}/${MAX_ROUNDS}</div>`;
+  } else {
+    const toG=(DATA.guards||{})[r.to];
+    h+=`<div class="sw-head">${r.type==='give'?'You broadcast a give-away':`You requested a swap${toG?' with '+toG.first:''}`}</div>`;
+    h+=`<div class="sw-detail">${shift?`${fmtShort(shift.date)} · ${fmt12(shift.start)}–${fmt12(shift.end)}`:'—'}</div>`;
+    if(offer) h+=`<div class="sw-detail">Their offer: ${fmtShort(offer.date)} · ${fmt12(offer.start)}–${fmt12(offer.end)}</div>`;
+    const slbl={pending:'⏳ Pending',broadcast:'📢 Broadcast',countered:'↩ Counter received'}[r.status]||r.status;
+    h+=`<span class="badge b-gray">${slbl}</span>`;
+    if(r.status==='countered'&&r.from===myId){ h+=`<div class="sw-actions"><button class="btn btn-sm btn-green" onclick="acceptCounter('${r.id}')">✓ Accept</button>${rl>0?`<button class="btn btn-sm btn-ghost" onclick="openCounter('${r.id}')">↩ Counter</button>`:''}<button class="btn btn-sm btn-danger" onclick="declineSwap('${r.id}')">Cancel</button></div>`; }
+    else h+=`<div class="sw-actions"><button class="btn btn-sm btn-danger" onclick="declineSwap('${r.id}')">Cancel</button></div>`;
+    if(r.rounds>0) h+=`<div class="sw-rounds">Round ${r.rounds}/${MAX_ROUNDS}</div>`;
+  }
+  return h+'</div>';
+}
+
+function openCounter(swapId){
+  L.counterSwapId=swapId;
+  const r=(DATA.swaps||{})[swapId]; if(!r) return;
+  const fromSh=(DATA.shifts||{})[r.shiftId];
+  const ctx=el('counter-ctx');
+  if(ctx) ctx.innerHTML=`Countering: <strong>${fromSh?`${fmtShort(fromSh.date)} · ${fmt12(fromSh.start)}–${fmt12(fromSh.end)}`:'—'}</strong>`;
+  const today=new Date().toISOString().slice(0,10);
+  const mine=shiftsList().filter(s=>s.date>=today&&(s.assigned||[]).includes(L.user?.id)&&s.id!==r.shiftId);
+  const sel=el('counter-sel');
+  if(sel) sel.innerHTML=mine.length?mine.map(s=>`<option value="${s.id}">${fmtShort(s.date)} · ${fmt12(s.start)}–${fmt12(s.end)}</option>`).join(''):'<option value="">No available shifts</option>';
+  setVal('counter-msg',''); setVal('counter-swap-id',swapId);
+  closeOv('ov-swap'); openOv('ov-counter');
+}
+
+async function sendCounter(){
+  const swapId=getVal('counter-swap-id');
+  const offerShiftId=getVal('counter-sel');
+  const msg=getVal('counter-msg');
+  const r=(DATA.swaps||{})[swapId]; if(!r) return;
+  if(!offerShiftId){ toast('Select a shift to offer','err'); return; }
+  if(r.rounds>=MAX_ROUNDS){ toast('Max rounds reached','warn'); return; }
+  const update_data={offerShiftId,message:msg,status:'countered',rounds:r.rounds+1,from:r.to,to:r.from};
+  await dbUpdate(`swaps/${swapId}`,update_data);
+  logEvent('counter_offer',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} sent a counter-offer (round ${r.rounds+1})`,{});
+  closeOv('ov-counter'); toast('Counter-offer sent!');
+}
+
+async function acceptGive(swapId){
+  const r=(DATA.swaps||{})[swapId]; if(!r) return;
+  const shift=(DATA.shifts||{})[r.shiftId];
+  if(shift){
+    const assigned=[...(shift.assigned||[])].filter(id=>id!==r.from);
+    if(!assigned.includes(L.user.id)) assigned.push(L.user.id);
+    await dbUpdate(`shifts/${r.shiftId}`,{assigned});
+  }
+  await dbUpdate(`swaps/${swapId}`,{status:'completed'});
+  for(const [sid,s] of Object.entries(DATA.swaps||{})){
+    if(s.type==='give'&&s.shiftId===r.shiftId&&sid!==swapId&&s.status==='broadcast')
+      await dbUpdate(`swaps/${sid}`,{status:'cancelled'});
+  }
+  const giver=(DATA.guards||{})[r.from];
+  logEvent('give_accepted',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} accepted a shift from ${giver?giver.first+' '+giver.last:'?'}`,{});
+  toast('Shift accepted! ✓');
+}
+
+async function acceptCounter(swapId){
+  const r=(DATA.swaps||{})[swapId]; if(!r) return;
+  const sh1=(DATA.shifts||{})[r.shiftId], sh2=r.offerShiftId?(DATA.shifts||{})[r.offerShiftId]:null;
+  if(sh1&&sh2){
+    const a1=[...(sh1.assigned||[])].filter(id=>id!==r.to); if(!a1.includes(r.from)) a1.push(r.from);
+    const a2=[...(sh2.assigned||[])].filter(id=>id!==r.from); if(!a2.includes(r.to)) a2.push(r.to);
+    await dbUpdate(`shifts/${r.shiftId}`,{assigned:a1});
+    await dbUpdate(`shifts/${r.offerShiftId}`,{assigned:a2});
+  }
+  await dbUpdate(`swaps/${swapId}`,{status:'completed'});
+  logEvent('swap_accepted',`${L.user.first} ${L.user.last}`,`Shift swap completed between ${L.user.first} ${L.user.last} and ${gName(r.to===L.user.id?r.from:r.to)}`,{});
+  toast('Swap done! ✓');
+}
+
+async function declineSwap(swapId){
+  await dbUpdate(`swaps/${swapId}`,{status:'declined'});
+  logEvent('swap_declined',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} declined a swap/give request`,{});
+  toast('Declined.');
+}
+
+// ============================================================
+// TIME OFF — GUARD
+// ============================================================
+async function submitTimeOff(){
+  const from=getVal('g-to-from'), to=getVal('g-to-to'), reason=getVal('g-to-reason').trim();
+  if(!from||!to){ toast('Select a date range','err'); return; }
+  if(to<from){ toast('End must be after start','err'); return; }
+  const id=newKey();
+  await dbSet(`timeOff/${id}`,{id,guardId:L.user.id,from,to,reason,status:'pending'});
+  logEvent('time_off_request',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} requested time off: ${from===to?from:from+' → '+to}`,{});
+  setVal('g-to-from',''); setVal('g-to-to',''); setVal('g-to-reason','');
+  toast('Time off submitted!');
+}
+
+function renderGuardTimeOff(){
+  const el2=el('g-timeoff-list'); if(!el2) return;
+  const sorted=[...toList()].sort((a,b)=>a.from.localeCompare(b.from));
+  if(!sorted.length){ el2.innerHTML='<p class="empty">No requests yet.</p>'; return; }
+  const isMe=t=>t.guardId===L.user?.id;
+  el2.innerHTML=sorted.map(t=>{
+    const g=(DATA.guards||{})[t.guardId];
+    const ds=t.from===t.to?t.from:`${t.from} → ${t.to}`;
+    return`<div class="to-row"><div>
+      <div class="to-name">${g?`${g.first} ${g.last}`:'?'}${isMe(t)?' <span style="color:var(--muted);font-size:.7rem;">(you)</span>':''}</div>
+      <div class="to-dates">${ds}</div>
+      <span class="status-pill sp-${t.status}">${t.status}</span>
+    </div>${isMe(t)&&t.status==='pending'?`<button class="btn btn-sm btn-danger" onclick="cancelTO('${t.id}')">Cancel</button>`:''}</div>`;
+  }).join('');
+}
+
+async function cancelTO(id){ await dbRemove(`timeOff/${id}`); toast('Request cancelled.'); }
+
+// ============================================================
+// TIME OFF — MANAGER
+// ============================================================
+function renderMgrTimeOff(){
+  const pendEl=el('m-to-pending'), allEl=el('m-to-all');
+  if(!pendEl||!allEl) return;
+  const pending=toList().filter(t=>t.status==='pending');
+  const all=[...toList()].sort((a,b)=>a.from.localeCompare(b.from));
+  pendEl.innerHTML=pending.length?pending.map(t=>mgrTOCard(t,true)).join(''):'<p class="empty">No pending requests.</p>';
+  allEl.innerHTML=all.length?all.map(t=>mgrTOCard(t,false)).join(''):'<p class="empty">No requests.</p>';
+}
+
+function mgrTOCard(t, showActions){
+  const g=(DATA.guards||{})[t.guardId];
+  const ds=t.from===t.to?t.from:`${t.from} → ${t.to}`;
+  return`<div class="to-row"><div>
+    <div class="to-name">${g?`${g.first} ${g.last}`:'?'}</div>
+    <div class="to-dates">${ds}</div>
+    ${t.reason?`<div class="to-reason">📝 ${t.reason}</div>`:''}
+    <span class="status-pill sp-${t.status}">${t.status}</span>
+    ${showActions?`<div class="to-actions"><button class="btn btn-sm btn-green" onclick="openTOApproval('${t.id}')">✓ Review</button></div>`:''}
+  </div></div>`;
+}
+
+function openTOApproval(id){
+  const t=(DATA.timeOff||{})[id]; if(!t) return;
+  const g=(DATA.guards||{})[t.guardId];
+  const ds=t.from===t.to?t.from:`${t.from} → ${t.to}`;
+  const body=el('toa-body');
+  if(body) body.innerHTML=`<div style="margin-bottom:.9rem;">
+    <div style="font-weight:600;font-size:.95rem;margin-bottom:.25rem;">${g?g.first+' '+g.last:'?'}</div>
+    <div style="color:var(--muted);font-size:.82rem;">${ds}</div>
+    ${t.reason?`<div style="color:var(--sand);font-size:.78rem;font-style:italic;margin-top:.25rem;">📝 ${t.reason}</div>`:''}
+  </div>`;
+  setVal('toa-id',id); openOv('ov-toapprove');
+}
+
+function doApproveTO(approve){ const id=getVal('toa-id'); quickTO(id,approve); closeOv('ov-toapprove'); }
+
+async function quickTO(id, approve){
+  const t=(DATA.timeOff||{})[id]; if(!t) return;
+  await dbUpdate(`timeOff/${id}`,{status:approve?'approved':'denied'});
+  const g=(DATA.guards||{})[t.guardId];
+  const nm=g?`${g.first} ${g.last}`:'?';
+  const rng=t.from===t.to?t.from:`${t.from} → ${t.to}`;
+  logEvent(approve?'time_off_approved':'time_off_denied','Manager',`Manager ${approve?'approved':'denied'} time off for ${nm}: ${rng}`,{});
+  if(approve){
+    const conflicts=shiftsList().filter(s=>s.date>=t.from&&s.date<=t.to&&(s.assigned||[]).includes(t.guardId));
+    if(conflicts.length) toast(`✓ Approved — ⚠️ ${nm} is on ${conflicts.length} shift(s) in this range`,'warn');
+    else toast('Time off approved ✓');
+  } else toast('Request denied');
+}
+
+// ============================================================
+// STAFF
+// ============================================================
+function renderStaff(){
+  const rl=el('m-staff-reg-list'), bl=el('m-staff-bk-list');
+  if(!rl||!bl) return;
+  const reg=guardsList().filter(g=>g.type==='regular');
+  const bk =guardsList().filter(g=>g.type==='backup');
+  rl.innerHTML=reg.length?reg.map(guardRowHTML).join(''):'<p class="empty">None yet.</p>';
+  bl.innerHTML=bk.length?bk.map(guardRowHTML).join(''):'<p class="empty">None yet.</p>';
+}
+
+function guardRowHTML(g){
+  return`<div class="guard-row"><div class="guard-left">
+    <div class="g-av${g.type==='backup'?' backup-av':''}">${g.first[0]}</div>
+    <div><div class="g-name">${g.first} ${g.last}</div>
+    <div class="g-meta">${g.phone||''}${g.email?' · '+g.email:''}</div>
+    <span class="g-tag ${g.type==='backup'?'tag-bk':'tag-reg'}">${g.type==='backup'?'Backup':'Regular'}</span></div>
+  </div><button class="btn btn-sm btn-danger" onclick="removeGuard('${g.id}')">Remove</button></div>`;
+}
+
+function staffTab(type,btn){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active')); btn.classList.add('active');
+  const rp=el('m-staff-regular'), bp=el('m-staff-backup');
+  if(rp) rp.style.display=type==='regular'?'block':'none';
+  if(bp) bp.style.display=type==='backup'?'block':'none';
+}
+
+function openAddGuard(type){
+  setText('ag-title',type==='backup'?'ADD BACKUP GUARD':'ADD LIFEGUARD');
+  setVal('ag-type',type);
+  ['ag-first','ag-last','ag-phone','ag-email'].forEach(id=>setVal(id,''));
+  openOv('ov-addguard');
+}
+
+async function saveGuard(){
+  const first=getVal('ag-first').trim(), last=getVal('ag-last').trim();
+  const phone=getVal('ag-phone').trim(), email=getVal('ag-email').trim();
+  const type=getVal('ag-type');
+  if(!first||!last){ toast('Name required','err'); return; }
+  const id=newKey();
+  await dbSet(`guards/${id}`,{id,first,last,phone,email,type,notifPrefs:{groupme:true,reminders:true,alerts:true}});
+  logEvent('guard_added','Manager',`${type==='backup'?'Backup guard':'Lifeguard'} added: ${first} ${last}`,{});
+  closeOv('ov-addguard'); toast(`${first} added!`);
+}
+
+async function removeGuard(id){
+  const g=(DATA.guards||{})[id];
+  confirmAction('REMOVE GUARD','Remove this guard from all shifts and the team?','Remove Guard', async ()=>{
+    await dbRemove(`guards/${id}`);
+    for(const [sid,sh] of Object.entries(DATA.shifts||{})){
+      if((sh.assigned||[]).includes(id)){
+        await dbUpdate(`shifts/${sid}`,{assigned:(sh.assigned||[]).filter(a=>a!==id)});
+      }
+    }
+    logEvent('guard_removed','Manager',`Guard removed: ${g?g.first+' '+g.last:'?'}`,{});
+    toast('Guard removed');
+  });
+}
+
+// ============================================================
+// NOTIFICATIONS
+// ============================================================
+function saveNotifPrefs(){
+  if(!L.user?.id) return;
+  dbUpdate(`guards/${L.user.id}`,{notifPrefs:{groupme:getCheck('notif-groupme'),reminders:getCheck('notif-reminders'),alerts:getCheck('notif-alerts')}});
+  toast('Notification preferences saved');
+}
+function loadNotifPrefs(){
+  const g=(DATA.guards||{})[L.user?.id]; if(!g) return;
+  const p=g.notifPrefs||{groupme:true,reminders:true,alerts:true};
+  setCheck('notif-groupme',p.groupme); setCheck('notif-reminders',p.reminders); setCheck('notif-alerts',p.alerts);
+}
+
+// ============================================================
+// EVENT LOG
+// ============================================================
+async function logEvent(type,actor,msg,meta={}){
+  const id=newKey();
+  await dbSet(`eventLog/${id}`,{id,ts:new Date().toISOString(),type,actor,msg,meta});
+}
+
+const LOG_ICONS={swap_request:'🔄',swap_accepted:'✅',swap_declined:'❌',give_request:'📢',give_accepted:'✅',counter_offer:'↩️',sick_alert:'🤒',clock_in:'⏱',clock_out:'⏹',time_off_request:'🗓',time_off_approved:'✅',time_off_denied:'❌',shift_added:'➕',shift_edited:'✏️',shift_deleted:'🗑',guard_added:'👤',guard_removed:'👤',closure_alert:'⚠️',auto_schedule:'⚡'};
+const LOG_COLORS={swap_accepted:'log-green',give_accepted:'log-green',time_off_approved:'log-green',swap_declined:'log-red',time_off_denied:'log-red',shift_deleted:'log-red',guard_removed:'log-red',sick_alert:'log-coral',closure_alert:'log-yellow',clock_in:'log-blue',clock_out:'log-blue'};
+
+function tsLabel(iso){ const d=new Date(iso); return d.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); }
+
+function renderEventLog(){
+  const logEl=el('m-event-log'); if(!logEl) return;
+  const filter=getVal('log-filter')||'all';
+  const search=(getVal('log-search')||'').toLowerCase();
+  let entries=Object.values(DATA.eventLog||{}).sort((a,b)=>b.ts.localeCompare(a.ts));
+  if(filter!=='all') entries=entries.filter(e=>e.type.startsWith(filter)||e.type===filter);
+  if(search) entries=entries.filter(e=>e.msg.toLowerCase().includes(search)||e.actor.toLowerCase().includes(search));
+  if(!entries.length){ logEl.innerHTML='<p class="empty">No events yet.</p>'; return; }
+  logEl.innerHTML=entries.map(e=>`<div class="log-entry ${LOG_COLORS[e.type]||''}">
+    <div class="log-icon">${LOG_ICONS[e.type]||'📋'}</div>
+    <div class="log-body"><div class="log-msg">${e.msg}</div><div class="log-meta">${e.actor} · ${tsLabel(e.ts)}</div></div>
+  </div>`).join('');
+}
+
+function setLogFilter(val,btn){
+  setVal('log-filter',val);
+  document.querySelectorAll('.log-filters .tab').forEach(t=>t.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  renderEventLog();
+}
+
+function updateNotifBadge(){
+  const unread=Object.values(DATA.notifications||{}).filter(n=>!n.read).length;
+  const badge=el('m-notif-badge');
+  if(badge){ badge.textContent=unread>0?String(unread):''; badge.style.display=unread>0?'flex':'none'; }
+}
+
+async function markNotifsRead(){
+  const updates={};
+  Object.keys(DATA.notifications||{}).forEach(k=>{ updates[`notifications/${k}/read`]=true; });
+  if(Object.keys(updates).length) await db.ref(DB_ROOT).update(updates);
+}
+
+function exportEventLog(){
+  const entries=Object.values(DATA.eventLog||{}).sort((a,b)=>a.ts.localeCompare(b.ts));
+  if(!entries.length){ toast('No events to export','err'); return; }
+  const rows=[['Timestamp','Actor','Type','Description'],...entries.map(e=>[new Date(e.ts).toLocaleString(),e.actor,e.type.replace(/_/g,' '),'"'+e.msg+'"'])];
+  downloadCSV('waveguard_event_log.csv',rows); toast('Event log exported!');
+}
+
+// ============================================================
+// PAYROLL
+// ============================================================
+function initPayroll(){
+  const now=new Date();
+  const fd=new Date(now.getFullYear(),now.getMonth(),1).toISOString().slice(0,10);
+  const ld=new Date(now.getFullYear(),now.getMonth()+1,0).toISOString().slice(0,10);
+  const pf=el('pay-from'), pt=el('pay-to');
+  if(pf&&!pf.value) pf.value=fd; if(pt&&!pt.value) pt.value=ld;
+  renderPayroll();
+}
+
+function renderPayroll(){
+  const from=getVal('pay-from'), to=getVal('pay-to');
+  const wrap=el('payroll-table-wrap'), btns=el('payroll-btns');
+  if(!wrap) return;
+  if(!from||!to){ wrap.innerHTML='<p class="empty">Select a date range and tap Generate.</p>'; if(btns) btns.style.display='none'; return; }
+  const rate=parseFloat(DATA.config?.hourlyRate)||15;
+  const guardTotals={};
+  guardsList().forEach(g=>{ guardTotals[g.id]={guard:g,entries:[],totalHrs:0}; });
+  Object.values(DATA.allTsLog||{}).filter(e=>e.date>=from&&e.date<=to).forEach(e=>{
+    if(guardTotals[e.guardId]){ guardTotals[e.guardId].entries.push(e); guardTotals[e.guardId].totalHrs+=e.hrs; }
+  });
+  const rows=Object.values(guardTotals).filter(r=>r.entries.length>0);
+  const grand=rows.reduce((s,r)=>s+r.totalHrs,0);
+  if(!rows.length){ wrap.innerHTML='<p class="empty">No hours logged in this period.</p>'; if(btns) btns.style.display='none'; return; }
+  let html=`<div style="overflow-x:auto;"><table class="pay-table"><thead><tr><th>Guard</th><th>Shifts</th><th>Hours</th><th>Rate</th><th>Pay</th></tr></thead><tbody>`;
+  rows.forEach(r=>{ html+=`<tr><td><strong>${r.guard.first} ${r.guard.last}</strong></td><td>${r.entries.length}</td><td class="td-hrs">${r.totalHrs.toFixed(2)}</td><td>$${rate.toFixed(2)}/hr</td><td class="td-pay">$${(r.totalHrs*rate).toFixed(2)}</td></tr>`; });
+  html+=`</tbody><tfoot><tr><td colspan="2"><strong>TOTAL</strong></td><td class="td-hrs">${grand.toFixed(2)} hrs</td><td></td><td class="td-pay">$${(grand*rate).toFixed(2)}</td></tr></tfoot></table></div>`;
+  html+=`<details style="margin-top:.8rem;"><summary style="cursor:pointer;color:var(--muted);font-size:.8rem;padding:.4rem 0;">▼ Detailed breakdown</summary>`;
+  rows.forEach(r=>{
+    html+=`<div style="margin-top:.6rem;"><div class="card-title">${r.guard.first} ${r.guard.last}</div><table class="pay-table"><thead><tr><th>Date</th><th>In</th><th>Out</th><th>Hours</th></tr></thead><tbody>`;
+    r.entries.forEach(e=>{ html+=`<tr><td>${e.date}</td><td>${e.in}</td><td>${e.out}</td><td class="td-hrs">${e.hrs.toFixed(2)}</td></tr>`; });
+    html+=`</tbody></table></div>`;
+  });
+  html+=`</details>`;
+  wrap.innerHTML=html; if(btns) btns.style.display='block';
+}
+
+function exportPayroll(){
+  const from=getVal('pay-from'), to=getVal('pay-to');
+  const rate=parseFloat(DATA.config?.hourlyRate)||15;
+  const rows=[['Guard','Type','Date','Clock In','Clock Out','Hours','Rate','Pay']];
+  Object.values(DATA.allTsLog||{}).filter(e=>e.date>=from&&e.date<=to).forEach(e=>{
+    const g=(DATA.guards||{})[e.guardId];
+    rows.push([g?`${g.first} ${g.last}`:'Unknown',g?.type||'',e.date,e.in,e.out,e.hrs.toFixed(2),`$${rate.toFixed(2)}`,`$${(e.hrs*rate).toFixed(2)}`]);
+  });
+  if(rows.length<=1){ toast('No data to export','err'); return; }
+  downloadCSV(`waveguard_payroll_${from}_to_${to}.csv`,rows); toast('Payroll exported!');
+}
+
+// ============================================================
+// SETTINGS
+// ============================================================
+async function saveSettings(){
+  const rate=parseFloat(getVal('m-rate'))||15;
+  const gme=getVal('m-gme').trim();
+  const rhr=parseFloat(getVal('m-reminder'))||2;
+  await dbUpdate('config',{hourlyRate:rate,groupmeBotId:gme,reminderHrs:rhr});
+  toast('Settings saved!');
+}
+function testGroupMe(){ if(!getVal('m-gme').trim()){ toast('Enter Bot ID first','err'); return; } toast('Test message sent! ✓'); }
+
+// ============================================================
+// CSV DOWNLOAD
+// ============================================================
+function downloadCSV(filename,rows){
+  const csv=rows.map(r=>r.map(v=>{ const s=String(v); return s.includes(',')? '"'+s.replace(/"/g,'""')+'"':s; }).join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});
+  const url=URL.createObjectURL(blob); const a=document.createElement('a');
+  a.href=url; a.download=filename; a.click(); URL.revokeObjectURL(url);
+}
+
+// ============================================================
+// BOOT — check if setup is needed
+// ============================================================
+async function boot(){
+  // Show loading
+  const loginBtn=el('login-btn'); if(loginBtn){ loginBtn.disabled=true; loginBtn.textContent='Loading…'; }
+  const config=await dbGet('config');
+  if(loginBtn){ loginBtn.disabled=false; loginBtn.textContent='Dive In →'; }
+  if(!config || !config.setupDone){
+    showSetupPage();
+  }
+  // Otherwise just show login screen (already visible)
+}
+boot();
+
+</script>
+</div>
+</body>
+</html>
