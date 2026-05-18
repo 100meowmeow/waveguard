@@ -823,6 +823,25 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
+
+// ============================================================
+// GROUPME INTEGRATION
+// ============================================================
+async function postGroupMe(text){
+  const botId = DATA.config?.groupmeBotId;
+  if(!botId){ console.log('GroupMe: no bot ID configured'); return; }
+  try {
+    await fetch('https://api.groupme.com/v3/bots/post', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({bot_id: botId, text})
+    });
+    console.log('GroupMe message sent');
+  } catch(e){
+    console.warn('GroupMe post failed:', e.message);
+  }
+}
+
 // ============================================================
 // CONSTANTS
 // ============================================================
@@ -1633,7 +1652,11 @@ function openSickModal(){
 function confirmSick(){
   const shiftId=getVal('sick-sel');
   const shift=(DATA.shifts||{})[shiftId];
-  logEvent('sick_alert',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} called in sick${shift?' for '+fmt12(shift.start)+'–'+fmt12(shift.end)+' shift':''}`,{shiftId});
+  const actor=`${L.user.first} ${L.user.last}`;
+  logEvent('sick_alert',actor,`${actor} called in sick${shift?' for '+fmt12(shift.start)+'–'+fmt12(shift.end)+' shift':''}`,{shiftId});
+  // Post to GroupMe
+  const gmMsg = `🚨 EMERGENCY COVERAGE NEEDED!\n${actor} can't make their shift${shift?' ('+fmt12(shift.start)+'–'+fmt12(shift.end)+')':''}\nIf you can cover, accept in the WaveGuard app ASAP!`;
+  postGroupMe(gmMsg);
   closeOv('ov-sick'); toast('🚨 Emergency alert sent!');
 }
 function openClosureModal(){ openOv('ov-closure'); }
@@ -1645,6 +1668,9 @@ function sendClosure(){
   if(!tS||!tE){ toast('Enter start and end times','err'); return; }
   if(tE<=tS){ toast('End must be after start','err'); return; }
   logEvent('closure_alert','Manager',`Pool closure: ${reason} on ${date} ${fmt12(tS)}–${fmt12(tE)}${msg?' — '+msg:''}`,{});
+  // Post to GroupMe
+  const gmClosure = `⚠️ POOL CLOSURE\n📅 ${date}\n🕐 ${fmt12(tS)} – ${fmt12(tE)}\n❗ Reason: ${reason}${msg?' — '+msg:''}`;
+  postGroupMe(gmClosure);
   closeOv('ov-closure');
   setVal('cl-reason',''); setVal('cl-msg',''); setVal('cl-date',''); setVal('cl-time-start',''); setVal('cl-time-end','');
   toast('⚠️ Pool closure alert sent via GroupMe!');
@@ -1686,6 +1712,10 @@ async function sendSwapRequest(){
   } else {
     await dbSet(`swaps/${id}`,{id,type:'give',from:L.user.id,to:null,shiftId,offerShiftId:null,message:msg,status:'broadcast',rounds:0});
     logEvent('give_request',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} is giving away a shift`,{});
+    // Post to GroupMe
+    const giveSh=(DATA.shifts||{})[shiftId];
+    const giveDesc=giveSh?`${giveSh.date} ${fmt12(giveSh.start)}–${fmt12(giveSh.end)}`:'a shift';
+    postGroupMe(`📢 SHIFT AVAILABLE!\n${L.user.first} ${L.user.last} is giving away their shift:\n📅 ${giveDesc}\nFirst to accept in the WaveGuard app gets it!`);
     toast('Broadcast sent!');
   }
   closeOv('ov-swap');
