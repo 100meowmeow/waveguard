@@ -271,7 +271,69 @@ select option{background:#0e2030;}
 /* NOTIFICATION BADGE */
 .nav-btn-wrap{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;}
 .notif-badge{position:absolute;top:.35rem;right:calc(50% - 1rem);background:var(--coral);color:#fff;border-radius:50%;width:16px;height:16px;font-size:.55rem;font-weight:700;display:none;align-items:center;justify-content:center;line-height:1;}
+
+/* WEEKLY VIEW */
+.week-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:.9rem;}
+.week-nav h2{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;}
+.week-nav button{background:var(--card);border:1px solid var(--border);color:#fff;width:34px;height:34px;border-radius:8px;cursor:pointer;font-size:1rem;}
+.week-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:.4rem;margin-bottom:1rem;}
+.week-day{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:.5rem .35rem;min-height:80px;}
+.week-day.today-col{border-color:rgba(46,196,224,.4);background:rgba(46,196,224,.07);}
+.week-day-hdr{font-size:.6rem;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);margin-bottom:.3rem;text-align:center;}
+.week-day-date{font-size:.82rem;font-weight:600;text-align:center;margin-bottom:.35rem;}
+.week-shift{border-radius:5px;padding:.22rem .3rem;margin-bottom:.22rem;font-size:.6rem;line-height:1.3;}
+.ws-regular{background:rgba(46,196,224,.15);color:var(--wave);}
+.ws-party{background:rgba(255,209,102,.15);color:var(--yellow);}
+.ws-swim{background:rgba(45,212,160,.15);color:var(--green);}
+.ws-custom{background:rgba(255,107,74,.15);color:var(--coral);}
+.ws-under{background:rgba(255,107,74,.2);border:1px solid rgba(255,107,74,.4);color:var(--coral);}
+.week-empty{color:var(--muted);font-size:.65rem;text-align:center;padding:.3rem 0;}
+.week-stats{margin-bottom:1rem;}
+.stat-row{display:flex;justify-content:space-between;align-items:center;padding:.55rem 0;border-bottom:1px solid var(--border);font-size:.83rem;}
+.stat-name{color:#fff;font-weight:500;}
+.stat-count{color:var(--wave);font-weight:600;}
+.stat-warn{color:var(--coral);}
+.stat-bar-wrap{flex:1;margin:0 .7rem;background:rgba(255,255,255,.08);border-radius:4px;height:6px;overflow:hidden;}
+.stat-bar{height:100%;background:var(--wave);border-radius:4px;transition:width .3s;}
+.stat-bar.warn-bar{background:var(--coral);}
+.discrepancy-box{border-radius:10px;padding:.7rem .9rem;margin-bottom:.8rem;font-size:.82rem;}
+.disc-ok{background:rgba(45,212,160,.09);border:1px solid rgba(45,212,160,.2);color:var(--green);}
+.disc-warn{background:rgba(255,209,102,.09);border:1px solid rgba(255,209,102,.2);color:var(--yellow);}
+.disc-bad{background:rgba(255,107,74,.09);border:1px solid rgba(255,107,74,.2);color:var(--coral);}
+
+/* AVAILABLE TO COVER */
+.avail-toggle-row{display:flex;align-items:center;justify-content:space-between;padding:.7rem 0;border-bottom:1px solid var(--border);}
+.avail-toggle-label{font-size:.88rem;font-weight:500;}
+.avail-toggle-sub{font-size:.72rem;color:var(--muted);margin-top:.1rem;}
+.avail-pill{display:inline-block;padding:.2rem .6rem;border-radius:20px;font-size:.65rem;letter-spacing:.6px;text-transform:uppercase;}
+.avail-yes{background:rgba(45,212,160,.12);color:var(--green);}
+.avail-no{background:rgba(122,149,168,.12);color:var(--muted);}
+.toggle-switch{position:relative;width:42px;height:24px;flex-shrink:0;}
+.toggle-switch input{opacity:0;width:0;height:0;position:absolute;}
+.toggle-slider{position:absolute;inset:0;background:rgba(255,255,255,.1);border-radius:12px;cursor:pointer;transition:background .2s;}
+.toggle-slider:before{content:'';position:absolute;width:18px;height:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:transform .2s;}
+.toggle-switch input:checked + .toggle-slider{background:var(--green);}
+.toggle-switch input:checked + .toggle-slider:before{transform:translateX(18px);}
+
+/* GUARD PROFILE (manager) */
+.profile-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.65);z-index:300;align-items:center;justify-content:center;}
+.profile-overlay.open{display:flex;}
+.profile-sheet{background:#0e2030;border:1px solid var(--border);border-radius:18px;padding:1.4rem;width:calc(100% - 2rem);max-width:440px;max-height:82vh;overflow-y:auto;}
+.profile-av{width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,var(--wave),var(--ocean));display:flex;align-items:center;justify-content:center;font-size:1.5rem;font-weight:700;margin:0 auto .7rem;}
+.profile-name{font-family:'Bebas Neue',sans-serif;font-size:1.6rem;letter-spacing:2px;text-align:center;margin-bottom:.2rem;}
+.profile-tag{text-align:center;margin-bottom:1rem;}
+.profile-stat-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.6rem;margin-bottom:1rem;}
+.profile-stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:.7rem .5rem;text-align:center;}
+.profile-stat-val{font-family:'Bebas Neue',sans-serif;font-size:1.6rem;letter-spacing:1px;color:var(--wave);}
+.profile-stat-lbl{font-size:.6rem;letter-spacing:1px;text-transform:uppercase;color:var(--muted);}
+.avail-guard-row{display:flex;align-items:center;justify-content:space-between;padding:.6rem 0;border-bottom:1px solid var(--border);font-size:.85rem;}
+.avail-guard-name{font-weight:500;}
+.avail-guard-sub{font-size:.72rem;color:var(--muted);}
 </style>
+<!-- Firebase Compat SDK — gstatic is reliable from browsers -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
 </head>
 <body>
 <div id="app">
@@ -354,6 +416,17 @@ select option{background:#0e2030;}
         <span class="bb-icon">🤒</span>
         <span><span class="bb-strong">I Can't Make My Shift</span><span class="bb-small">Emergency alert → all guards + manager</span></span>
       </button>
+      <!-- Available to cover toggle -->
+      <div class="avail-toggle-row" style="margin-top:.6rem;">
+        <div>
+          <div class="avail-toggle-label">Available to Cover Today</div>
+          <div class="avail-toggle-sub">Let the manager know you can fill in if needed</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="avail-today-toggle" onchange="toggleAvailability(this.checked)"/>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
     </div>
     <!-- GUARD CALENDAR -->
     <div class="screen" id="g-screen-calendar">
@@ -455,6 +528,7 @@ select option{background:#0e2030;}
         <div class="qc" onclick="mNav('timeoff')"><div class="qc-icon">🗓</div><div class="qc-label">Time Off</div></div>
         <div class="qc" onclick="mNav('log')"><div class="qc-icon">📋</div><div class="qc-label">Event Log</div></div>
         <div class="qc" onclick="mNav('payroll')"><div class="qc-icon">💵</div><div class="qc-label">Payroll</div></div>
+        <div class="qc" onclick="mNav('week')"><div class="qc-icon">📊</div><div class="qc-label">Week View</div></div>
         <div class="qc" onclick="mNav('staff')"><div class="qc-icon">👥</div><div class="qc-label">Staff</div></div>
         <div class="qc" onclick="mNav('settings')"><div class="qc-icon">⚙️</div><div class="qc-label">Settings</div></div>
       </div>
@@ -462,6 +536,11 @@ select option{background:#0e2030;}
         <span class="bb-icon">⚠️</span>
         <span><span class="bb-strong-yellow">Pool Closure Alert</span><span class="bb-small">Notify entire team via GroupMe</span></span>
       </button>
+      <!-- Available guards panel -->
+      <div style="margin-top:.6rem;">
+        <div class="card-title">AVAILABLE TO COVER TODAY</div>
+        <div id="mgr-avail-list"><p class="empty">Loading...</p></div>
+      </div>
     </div>
     <!-- MGR CALENDAR -->
     <div class="screen" id="m-screen-calendar">
@@ -477,10 +556,26 @@ select option{background:#0e2030;}
     </div>
     <!-- MGR TIME OFF -->
     <div class="screen" id="m-screen-timeoff">
-      <div class="section-title">TIME OFF REQUESTS</div>
-      <div class="card-title">PENDING APPROVAL</div>
+      <div class="section-title">TIME OFF</div>
+      <!-- Manager add time off form -->
+      <div class="card">
+        <div class="card-title">ADD TIME OFF FOR A GUARD</div>
+        <div class="fg">
+          <label>Guard</label>
+          <select id="mgr-to-guard"></select>
+        </div>
+        <div class="row2">
+          <div class="fg"><label>From</label><input type="date" id="mgr-to-from"/></div>
+          <div class="fg"><label>To</label><input type="date" id="mgr-to-to"/></div>
+        </div>
+        <div class="fg"><label>Reason (optional)</label>
+          <input type="text" id="mgr-to-reason" placeholder="e.g. Vacation, Family trip"/></div>
+        <button class="btn btn-primary" onclick="mgrAddTimeOff()" style="margin-top:0">Mark as Approved Time Off</button>
+      </div>
+      <!-- Pending guard requests -->
+      <div class="card-title">PENDING GUARD REQUESTS</div>
       <div id="m-to-pending"></div>
-      <div class="card-title" style="margin-top:.9rem;">ALL REQUESTS</div>
+      <div class="card-title" style="margin-top:.9rem;">ALL APPROVED / DENIED</div>
       <div id="m-to-all"></div>
     </div>
     <!-- MGR STAFF -->
@@ -500,6 +595,24 @@ select option{background:#0e2030;}
         <button class="btn btn-ghost" onclick="openAddGuard('backup')" style="margin-top:.65rem">+ Add Backup Guard</button>
       </div>
     </div>
+
+    <!-- MGR WEEKLY VIEW -->
+    <div class="screen" id="m-screen-week">
+      <div class="section-title">WEEK AT A GLANCE</div>
+      <div class="week-nav">
+        <button onclick="weekPrev()">‹</button>
+        <h2 id="week-label">THIS WEEK</h2>
+        <button onclick="weekNext()">›</button>
+      </div>
+      <div class="week-grid" id="week-grid"></div>
+      <!-- Season-wide stats -->
+      <div class="card-title">SHIFT DISTRIBUTION — FULL SEASON</div>
+      <div id="week-stats-global" class="week-stats"></div>
+      <!-- This week stats -->
+      <div class="card-title" style="margin-top:.6rem;">THIS WEEK</div>
+      <div id="week-stats-local" class="week-stats"></div>
+    </div>
+
     <!-- MGR SETTINGS -->
     <div class="screen" id="m-screen-settings">
       <div class="section-title">SETTINGS</div>
@@ -572,6 +685,7 @@ select option{background:#0e2030;}
     <button class="nav-btn" id="m-nav-timeoff" onclick="mNav('timeoff',this)"><div class="nav-icon">🗓</div><div class="nav-label">Time Off</div></button>
     <button class="nav-btn" id="m-nav-log" onclick="mNav('log',this)" style="position:relative"><div class="nav-icon">📋</div><div class="nav-label">Log</div><div class="notif-badge" id="m-notif-badge"></div></button>
     <button class="nav-btn" id="m-nav-payroll" onclick="mNav('payroll',this)"><div class="nav-icon">💵</div><div class="nav-label">Payroll</div></button>
+    <button class="nav-btn" id="m-nav-week" onclick="mNav('week',this)"><div class="nav-icon">📊</div><div class="nav-label">Week</div></button>
     <button class="nav-btn" id="m-nav-staff" onclick="mNav('staff',this)"><div class="nav-icon">👥</div><div class="nav-label">Staff</div></button>
   </nav>
 </div>
@@ -797,9 +911,27 @@ select option{background:#0e2030;}
     </div>
   </div>
 </div>
-<!-- Firebase Compat SDK -->
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+
+<!-- Guard profile modal (manager) -->
+<div class="profile-overlay" id="ov-profile">
+  <div class="profile-sheet">
+    <div class="profile-av" id="prof-av">?</div>
+    <div class="profile-name" id="prof-name">—</div>
+    <div class="profile-tag" id="prof-tag"></div>
+    <div class="profile-stat-grid">
+      <div class="profile-stat"><div class="profile-stat-val" id="prof-shifts">0</div><div class="profile-stat-lbl">Shifts</div></div>
+      <div class="profile-stat"><div class="profile-stat-val" id="prof-hrs">0</div><div class="profile-stat-lbl">Hours</div></div>
+      <div class="profile-stat"><div class="profile-stat-val" id="prof-pay">$0</div><div class="profile-stat-lbl">Earned</div></div>
+    </div>
+    <div class="card-title">UPCOMING SHIFTS</div>
+    <div id="prof-upcoming" style="margin-bottom:.9rem;"></div>
+    <div class="card-title">TIME OFF</div>
+    <div id="prof-timeoff" style="margin-bottom:.9rem;"></div>
+    <div class="card-title">ACTIVE SWAP REQUESTS</div>
+    <div id="prof-swaps" style="margin-bottom:1rem;"></div>
+    <button class="btn btn-ghost" onclick="closeProfile()" style="width:100%;margin-top:0">Close</button>
+  </div>
+</div>
 
 
 <script>
@@ -820,9 +952,428 @@ const firebaseConfig = {
   appId: "1:963608978073:web:10bd717c5cb43d981ace08"
 };
 
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
+// Initialize Firebase
+let db;
+function initFirebase(){
+  try {
+    if(typeof firebase === 'undefined') throw new Error('Firebase SDK not loaded');
+    if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    db = firebase.database();
+    console.log('✅ Firebase connected');
+    boot(); // Start app only after Firebase is ready
+  } catch(e) {
+    console.error('❌ Firebase init failed:', e);
+    const d=document.createElement('div');
+    d.style.cssText='position:fixed;top:0;left:0;right:0;background:#ff6b4a;color:#fff;padding:1rem 1rem 1.2rem;z-index:9999;font-family:sans-serif;font-size:.88rem;text-align:center;line-height:1.5;';
+    d.innerHTML='⚠️ Could not connect to WaveGuard.<br>Check your internet connection and <a href="" style="color:#fff;font-weight:700;">refresh the page</a>.';
+    document.body.appendChild(d);
+  }
+}
 
+
+
+// ============================================================
+// MANAGER — ADD TIME OFF DIRECTLY
+// ============================================================
+function populateMgrTOGuardSelect(){
+  const sel=el('mgr-to-guard'); if(!sel) return;
+  const guards=guardsList();
+  sel.innerHTML=guards.length
+    ? guards.map(g=>`<option value="${g.id}">${g.first} ${g.last} (${g.type})</option>`).join('')
+    : '<option value="">No guards yet</option>';
+}
+
+async function mgrAddTimeOff(){
+  const guardId=getVal('mgr-to-guard');
+  const from   =getVal('mgr-to-from');
+  const to     =getVal('mgr-to-to');
+  const reason =getVal('mgr-to-reason').trim();
+  if(!guardId){ toast('Select a guard','err'); return; }
+  if(!from||!to){ toast('Select a date range','err'); return; }
+  if(to<from){ toast('End date must be after start','err'); return; }
+
+  const g=(DATA.guards||{})[guardId];
+  const id=newKey();
+  await dbSet(`timeOff/${id}`,{
+    id, guardId, from, to,
+    reason: reason||'(Added by manager)',
+    status:'approved'   // manager-added = auto approved
+  });
+
+  // Warn if guard is already scheduled during this range
+  const conflicts=shiftsList().filter(s=>
+    s.date>=from && s.date<=to && (s.assigned||[]).includes(guardId)
+  );
+  const gName2=g?`${g.first} ${g.last}`:'Guard';
+  const rangeStr=from===to?from:`${from} → ${to}`;
+
+  logEvent('time_off_approved','Manager',
+    `Manager marked time off for ${gName2}: ${rangeStr}${reason?' — '+reason:''}`,{});
+
+  setVal('mgr-to-from',''); setVal('mgr-to-to',''); setVal('mgr-to-reason','');
+
+  if(conflicts.length){
+    toast(`✓ Added — ⚠️ ${gName2} is on ${conflicts.length} shift(s) in this range`,'warn');
+  } else {
+    toast(`Time off added for ${gName2} ✓`);
+  }
+}
+
+// ============================================================
+// WEEKLY VIEW
+// ============================================================
+let _weekStart = null; // Monday of displayed week (Date object)
+
+function getMonday(d){
+  // Returns the Sunday of the week containing d
+  const dt=new Date(d);
+  const day=dt.getDay(); // 0=Sun
+  dt.setDate(dt.getDate()-day);
+  dt.setHours(0,0,0,0);
+  return dt;
+}
+
+function addDays(d,n){
+  const dt=new Date(d); dt.setDate(dt.getDate()+n); return dt;
+}
+
+function toDS(d){ return d.toISOString().slice(0,10); }
+
+function initWeekView(){
+  if(!_weekStart) _weekStart=getMonday(new Date());
+  renderWeekView();
+}
+
+function weekPrev(){
+  _weekStart=addDays(_weekStart,-7);
+  renderWeekView();
+}
+function weekNext(){
+  _weekStart=addDays(_weekStart,7);
+  renderWeekView();
+}
+
+function renderWeekView(){
+  const grid=el('week-grid');
+  const statsG=el('week-stats-global');
+  const statsL=el('week-stats-local');
+  if(!grid||!statsG||!statsL) return;
+
+  const weekDays=[];
+  for(let i=0;i<7;i++) weekDays.push(addDays(_weekStart,i));
+
+  // Update label
+  const labelStart=weekDays[0].toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  const labelEnd  =weekDays[6].toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  setText('week-label',`${labelStart} – ${labelEnd}`);
+
+  const today=toDS(new Date());
+  const allShifts=shiftsList();
+  const guards=guardsList();
+
+  // ── WEEK GRID ───────────────────────────────────────────
+  const DAY_SHORT=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  grid.innerHTML=weekDays.map((d,i)=>{
+    const ds=toDS(d);
+    const dayShifts=allShifts.filter(s=>s.date===ds);
+    const isToday=ds===today;
+    let inner=dayShifts.length?dayShifts.map(sh=>{
+      const under=(sh.assigned||[]).length<sh.required;
+      const cls=under?'week-shift ws-under':'week-shift ws-'+(sh.type||'regular');
+      const names=(sh.assigned||[]).map(id=>{
+        const g=(DATA.guards||{})[id]; return g?g.first:'?';
+      }).join(', ');
+      return`<div class="${cls}">${fmt12(sh.start)}–${fmt12(sh.end)}<br>${names||'Unassigned'}${under?' ⚠️':''}</div>`;
+    }).join(''):`<div class="week-empty">—</div>`;
+    return`<div class="week-day${isToday?' today-col':''}">
+      <div class="week-day-hdr">${DAY_SHORT[i]}</div>
+      <div class="week-day-date">${d.getDate()}</div>
+      ${inner}
+    </div>`;
+  }).join('');
+
+  // ── THIS WEEK STATS ──────────────────────────────────────
+  const weekDSs=weekDays.map(toDS);
+  const weekShifts=allShifts.filter(s=>weekDSs.includes(s.date));
+  const localCounts={};
+  guards.forEach(g=>localCounts[g.id]=0);
+  weekShifts.forEach(sh=>(sh.assigned||[]).forEach(id=>{ if(localCounts[id]!==undefined) localCounts[id]++; }));
+
+  const understaffedDays=weekShifts.filter(s=>(s.assigned||[]).length<s.required).length;
+
+  let localHTML='';
+  if(!weekShifts.length){
+    localHTML='<p class="empty">No shifts this week.</p>';
+  } else {
+    // Stats per guard this week
+    const vals=guards.filter(g=>g.type==='regular').map(g=>localCounts[g.id]||0);
+    const maxVal=Math.max(...vals,1);
+    localHTML=guards.filter(g=>g.type==='regular').map(g=>{
+      const cnt=localCounts[g.id]||0;
+      const pct=Math.round((cnt/maxVal)*100);
+      return`<div class="stat-row">
+        <div class="stat-name">${g.first} ${g.last}</div>
+        <div class="stat-bar-wrap"><div class="stat-bar" style="width:${pct}%"></div></div>
+        <div class="stat-count">${cnt} shift${cnt!==1?'s':''}</div>
+      </div>`;
+    }).join('');
+    if(understaffedDays){
+      localHTML+=`<div class="discrepancy-box disc-bad" style="margin-top:.6rem;">⚠️ ${understaffedDays} understaffed shift${understaffedDays>1?'s':''} this week</div>`;
+    }
+  }
+  statsL.innerHTML=localHTML;
+
+  // ── SEASON-WIDE STATS ────────────────────────────────────
+  const seasonCounts={};
+  guards.forEach(g=>seasonCounts[g.id]=0);
+  allShifts.forEach(sh=>(sh.assigned||[]).forEach(id=>{ if(seasonCounts[id]!==undefined) seasonCounts[id]++; }));
+
+  const regGuards=guards.filter(g=>g.type==='regular');
+  const seasonVals=regGuards.map(g=>seasonCounts[g.id]||0);
+  const seasonMax=Math.max(...seasonVals,1);
+  const seasonMin=Math.min(...seasonVals.filter(v=>v>0),0);
+  const seasonAvg=seasonVals.reduce((a,b)=>a+b,0)/(seasonVals.filter(v=>v>0).length||1);
+  const discrepancy=seasonMax-seasonMin;
+
+  let discMsg='', discCls='disc-ok';
+  if(discrepancy===0 && seasonMax===0){
+    discMsg='No shifts assigned yet.'; discCls='disc-warn';
+  } else if(discrepancy<=2){
+    discMsg=`✓ Very even distribution — max difference is ${discrepancy} shift${discrepancy!==1?'s':''}.`; discCls='disc-ok';
+  } else if(discrepancy<=5){
+    discMsg=`⚠️ Slight imbalance — ${discrepancy} shift difference between most and least assigned.`; discCls='disc-warn';
+  } else {
+    discMsg=`⚠️ Large imbalance — ${discrepancy} shift gap. Consider re-running auto-schedule.`; discCls='disc-bad';
+  }
+
+  let globalHTML=`<div class="discrepancy-box ${discCls}">${discMsg}</div>`;
+  globalHTML+=regGuards.map(g=>{
+    const cnt=seasonCounts[g.id]||0;
+    const pct=Math.round((cnt/seasonMax)*100);
+    const isMost=cnt===seasonMax&&seasonMax>0;
+    const isLeast=cnt===seasonMin&&seasonMin<seasonMax&&cnt<seasonAvg;
+    const barCls=isLeast&&discrepancy>3?'stat-bar warn-bar':'stat-bar';
+    const flag=isMost?' 🏆':isLeast&&discrepancy>3?' 🔻':'';
+    return`<div class="stat-row">
+      <div class="stat-name">${g.first} ${g.last}${flag}</div>
+      <div class="stat-bar-wrap"><div class="${barCls}" style="width:${pct}%"></div></div>
+      <div class="stat-count${isLeast&&discrepancy>3?' stat-warn':''}">${cnt} shift${cnt!==1?'s':''}</div>
+    </div>`;
+  }).join('');
+
+  // backup guards separate
+  const bkGuards=guards.filter(g=>g.type==='backup');
+  if(bkGuards.length){
+    globalHTML+=`<div class="card-title" style="margin-top:.7rem;">BACKUP GUARDS</div>`;
+    globalHTML+=bkGuards.map(g=>{
+      const cnt=seasonCounts[g.id]||0;
+      return`<div class="stat-row"><div class="stat-name">${g.first} ${g.last} ⭐</div><div class="stat-bar-wrap"><div class="stat-bar" style="width:${cnt>0?'40%':'5%'}"></div></div><div class="stat-count">${cnt} shift${cnt!==1?'s':''}</div></div>`;
+    }).join('');
+  }
+
+  statsG.innerHTML=globalHTML;
+}
+
+// ============================================================
+// FEATURE 2: AVAILABLE TO COVER
+// ============================================================
+async function toggleAvailability(isAvailable){
+  if(!L.user?.id) return;
+  const today = toDS(new Date());
+  const key = `availability/${L.user.id}_${today}`;
+  if(isAvailable){
+    await dbRef(key).set({
+      guardId: L.user.id,
+      date: today,
+      availableAt: new Date().toISOString(),
+    });
+    toast('Marked as available to cover today ✓');
+    logEvent('available_to_cover',
+      `${L.user.first} ${L.user.last}`,
+      `${L.user.first} ${L.user.last} is available to cover today`,
+      {date: today}
+    );
+  } else {
+    await dbRef(key).remove().catch(()=>{});
+    toast('Availability removed');
+  }
+}
+
+function loadAvailabilityToggle(){
+  if(!L.user?.id) return;
+  const today = toDS(new Date());
+  const key = `availability/${L.user.id}_${today}`;
+  dbRef(key).get().then(snap => {
+    const tog = el('avail-today-toggle');
+    if(tog) tog.checked = snap && snap.exists();
+  }).catch(()=>{});
+}
+
+function renderMgrAvailList(){
+  const listEl = el('mgr-avail-list'); if(!listEl) return;
+  const today = toDS(new Date());
+  dbRef('availability').get().then(snap => {
+    if(!snap || !snap.exists()){
+      listEl.innerHTML = '<p class="empty">No guards marked available today.</p>';
+      return;
+    }
+    const entries = Object.values(snap.val() || {}).filter(e => e.date === today);
+    if(!entries.length){
+      listEl.innerHTML = '<p class="empty">No guards marked available today.</p>';
+      return;
+    }
+    // Sort by time marked available (earliest first = most eager)
+    entries.sort((a,b) => a.availableAt.localeCompare(b.availableAt));
+    listEl.innerHTML = entries.map((e,i) => {
+      const g = (DATA.guards||{})[e.guardId];
+      const name = g ? `${g.first} ${g.last}` : '?';
+      const time = new Date(e.availableAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+      return `<div class="avail-guard-row">
+        <div>
+          <div class="avail-guard-name">${i===0?'⭐ ':''}${name}</div>
+          <div class="avail-guard-sub">Available since ${time}</div>
+        </div>
+        <span class="avail-pill avail-yes">Available</span>
+      </div>`;
+    }).join('');
+  }).catch(() => {
+    listEl.innerHTML = '<p class="empty">Could not load availability.</p>';
+  });
+}
+
+// Also listen live for availability changes on manager home
+function startAvailListener(){
+  const today = toDS(new Date());
+  dbRef('availability').on('value', snap => {
+    const listEl = el('mgr-avail-list'); if(!listEl) return;
+    if(!snap || !snap.exists()){
+      listEl.innerHTML = '<p class="empty">No guards marked available today.</p>';
+      return;
+    }
+    const entries = Object.values(snap.val()||{}).filter(e=>e.date===today);
+    if(!entries.length){
+      listEl.innerHTML = '<p class="empty">No guards marked available today.</p>';
+      return;
+    }
+    entries.sort((a,b)=>a.availableAt.localeCompare(b.availableAt));
+    listEl.innerHTML = entries.map((e,i)=>{
+      const g=(DATA.guards||{})[e.guardId];
+      const name=g?`${g.first} ${g.last}`:'?';
+      const time=new Date(e.availableAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+      return`<div class="avail-guard-row">
+        <div>
+          <div class="avail-guard-name">${i===0?'⭐ ':''}${name}</div>
+          <div class="avail-guard-sub">Available since ${time}</div>
+        </div>
+        <span class="avail-pill avail-yes">Available</span>
+      </div>`;
+    }).join('');
+  });
+  L.unsubscribers.push(()=>dbRef('availability').off('value'));
+}
+
+// ============================================================
+// FEATURE 6: GUARD PROFILE (manager view)
+// ============================================================
+function openProfile(guardId){
+  const g = (DATA.guards||{})[guardId];
+  if(!g) return;
+
+  // Basic info
+  const av = el('prof-av');
+  const nm = el('prof-name');
+  const tg = el('prof-tag');
+  if(av) av.textContent = g.first[0];
+  if(nm) nm.textContent = `${g.first} ${g.last}`;
+  if(tg) tg.innerHTML = `<span class="g-tag ${g.type==='backup'?'tag-bk':'tag-reg'}">${g.type==='backup'?'Backup Guard':'Regular Guard'}</span>`;
+
+  // Stats — shifts assigned this season
+  const allShifts = shiftsList();
+  const myShifts  = allShifts.filter(s => (s.assigned||[]).includes(guardId));
+  const today     = toDS(new Date());
+  const upcoming  = myShifts.filter(s => s.date >= today).sort((a,b)=>a.date.localeCompare(b.date));
+
+  // Hours and pay from allTsLog
+  const myLogs = Object.values(DATA.allTsLog||{}).filter(e=>e.guardId===guardId);
+  const totalHrs = myLogs.reduce((s,r)=>s+r.hrs, 0);
+  const rate = parseFloat(DATA.config?.hourlyRate)||15;
+  const totalPay = totalHrs * rate;
+
+  const shiftsEl = el('prof-shifts');
+  const hrsEl    = el('prof-hrs');
+  const payEl    = el('prof-pay');
+  if(shiftsEl) shiftsEl.textContent = myShifts.length;
+  if(hrsEl)    hrsEl.textContent    = totalHrs.toFixed(1);
+  if(payEl)    payEl.textContent    = '$'+Math.round(totalPay);
+
+  // Upcoming shifts
+  const upEl = el('prof-upcoming');
+  if(upEl){
+    upEl.innerHTML = upcoming.length
+      ? upcoming.slice(0,5).map(s=>`
+          <div class="to-row" style="padding:.5rem 0;">
+            <div>
+              <div style="font-size:.85rem;font-weight:500;">${fmtShort(s.date)}</div>
+              <div style="font-size:.75rem;color:var(--muted);">${fmt12(s.start)}–${fmt12(s.end)}</div>
+            </div>
+            <span class="type-badge tb-${s.type}">${TYPE_LABELS[s.type]||s.type}</span>
+          </div>`).join('')
+      : '<p class="empty">No upcoming shifts.</p>';
+  }
+
+  // Time off
+  const toEl = el('prof-timeoff');
+  if(toEl){
+    const myTO = toList().filter(t=>t.guardId===guardId)
+      .sort((a,b)=>a.from.localeCompare(b.from));
+    toEl.innerHTML = myTO.length
+      ? myTO.map(t=>`
+          <div class="to-row" style="padding:.5rem 0;">
+            <div>
+              <div style="font-size:.83rem;">${t.from===t.to?t.from:t.from+' → '+t.to}</div>
+              ${t.reason?`<div style="font-size:.73rem;color:var(--sand);font-style:italic;">${t.reason}</div>`:''}
+            </div>
+            <span class="status-pill sp-${t.status}">${t.status}</span>
+          </div>`).join('')
+      : '<p class="empty">No time off requests.</p>';
+  }
+
+  // Active swaps
+  const swEl = el('prof-swaps');
+  if(swEl){
+    const mySwaps = swapsList().filter(s=>
+      (s.from===guardId||s.to===guardId) &&
+      ['pending','broadcast','countered'].includes(s.status)
+    );
+    swEl.innerHTML = mySwaps.length
+      ? mySwaps.map(s=>{
+          const other = s.from===guardId
+            ? (DATA.guards||{})[s.to]
+            : (DATA.guards||{})[s.from];
+          const otherName = other?`${other.first} ${other.last}`:'All guards';
+          const badge = s.type==='give'
+            ? '<span class="badge b-yellow">Give Away</span>'
+            : '<span class="badge b-blue">Swap</span>';
+          return `<div style="padding:.4rem 0;font-size:.82rem;">${badge} with ${otherName} — <span style="color:var(--muted)">${s.status}</span></div>`;
+        }).join('')
+      : '<p class="empty">No active requests.</p>';
+  }
+
+  // Show overlay
+  const overlay = el('ov-profile');
+  if(overlay){
+    overlay.style.display='flex';
+    setTimeout(()=>overlay.classList.add('open'),10);
+  }
+}
+
+function closeProfile(){
+  const overlay = el('ov-profile');
+  if(overlay){
+    overlay.classList.remove('open');
+    setTimeout(()=>overlay.style.display='none',300);
+  }
+}
 
 // ============================================================
 // GROUPME INTEGRATION
@@ -986,6 +1537,12 @@ function toast(msg,type='ok'){
 }
 function openOv(id){ const e=el(id); if(e) e.classList.add('open'); }
 function closeOv(id){ const e=el(id); if(e) e.classList.remove('open'); }
+
+// Profile overlay close on backdrop
+document.addEventListener('DOMContentLoaded',()=>{
+  const profOv=el('ov-profile');
+  if(profOv) profOv.addEventListener('click',e=>{if(e.target===profOv)closeProfile();});
+});
 
 document.querySelectorAll('.overlay').forEach(o=>{
   o.addEventListener('click',e=>{ if(e.target===o) o.classList.remove('open'); });
@@ -1167,6 +1724,8 @@ function hideLoginError(){
 }
 
 function mountGuard(first, last){
+  // Will load avail toggle after mount
+  setTimeout(loadAvailabilityToggle, 500);
   hide('login-screen'); hide('mgr-app');
   show('guard-app','flex');
   setText('g-hdr-name', first);
@@ -1183,6 +1742,7 @@ function mountGuard(first, last){
 }
 
 function mountManager(first, last){
+  setTimeout(()=>{ renderMgrAvailList(); startAvailListener(); }, 500);
   hide('login-screen'); hide('guard-app');
   show('mgr-app','flex');
   setText('m-hdr-name', first);
@@ -1221,15 +1781,16 @@ function gNav(screen, btn){
   if(screen==='timeoff') { renderGuardTimeOff(); loadNotifPrefs(); }
 }
 function mNav(screen, btn){
-  ['home','calendar','timeoff','staff','settings','log','payroll'].forEach(s=>{
+  ['home','calendar','timeoff','staff','settings','log','payroll','week'].forEach(s=>{
     removeClass('m-screen-'+s,'active'); removeClass('m-nav-'+s,'active');
   });
   addClass('m-screen-'+screen,'active');
   if(btn) btn.classList.add('active'); else addClass('m-nav-'+screen,'active');
-  if(screen==='timeoff') renderMgrTimeOff();
+  if(screen==='timeoff'){ renderMgrTimeOff(); populateMgrTOGuardSelect(); }
   if(screen==='staff')   renderStaff();
   if(screen==='log')     { renderEventLog(); markNotifsRead(); }
   if(screen==='payroll') initPayroll();
+  if(screen==='week')    initWeekView();
 }
 
 // ============================================================
@@ -1926,7 +2487,7 @@ function renderStaff(){
 }
 
 function guardRowHTML(g){
-  return`<div class="guard-row"><div class="guard-left">
+  return`<div class="guard-row" style="cursor:pointer" onclick="openProfile('${g.id}')" title="Tap to view profile"><div class="guard-left">
     <div class="g-av${g.type==='backup'?' backup-av':''}">${g.first[0]}</div>
     <div><div class="g-name">${g.first} ${g.last}</div>
     <div class="g-meta">${g.phone||''}${g.email?' · '+g.email:''}</div>
@@ -2143,8 +2704,8 @@ function boot(){
     showSetupPage(); // Can't reach Firebase, assume first time
   });
 }
-boot();
-
+// boot() is called by initFirebase() after Firebase loads
+window.addEventListener('load', initFirebase);
 </script>
 </div>
 </body>
