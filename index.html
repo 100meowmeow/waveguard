@@ -373,6 +373,14 @@ select option{background:#0e2030;}
 
 /* GUARD AVAILABILITY ON CALENDAR */
 .avail-dot{width:4px;height:4px;background:var(--green);border-radius:50%;display:inline-block;margin-left:1px;vertical-align:middle;}
+
+/* LOADING SCREEN */
+#loading-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:2rem;}
+.loading-logo{font-family:'Bebas Neue',sans-serif;font-size:3.5rem;letter-spacing:4px;color:#2ec4e0;text-shadow:0 0 40px rgba(46,196,224,.35);margin-bottom:.5rem;}
+.loading-sub{font-size:.72rem;letter-spacing:4px;text-transform:uppercase;color:#7a95a8;margin-bottom:2rem;}
+.loading-spinner{width:40px;height:40px;border:3px solid rgba(46,196,224,.2);border-top-color:#2ec4e0;border-radius:50%;animation:spin 0.8s linear infinite;margin-bottom:1rem;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.loading-status{font-size:.8rem;color:#7a95a8;text-align:center;}
 </style>
 <!-- Firebase Compat SDK — gstatic is reliable from browsers -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -383,6 +391,15 @@ select option{background:#0e2030;}
 <div id="app">
 <div id="toast" class="toast"></div>
 
+
+
+<!-- Loading screen - shown while Firebase connects -->
+<div id="loading-screen">
+  <div class="loading-spinner"></div>
+  <div class="loading-logo">WaveGuard</div>
+  <div class="loading-sub">Lifeguard Scheduling</div>
+  <div class="loading-status" id="loading-status">Connecting…</div>
+</div>
 
 <!-- ===== SETUP SCREEN (first-time manager onboarding) ===== -->
 <div id="setup-screen" style="display:none;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:2rem;">
@@ -404,7 +421,7 @@ select option{background:#0e2030;}
 </div>
 
 <!-- ===== LOGIN ===== -->
-<div id="login-screen">
+<div id="login-screen" style="display:none;">
   <div class="wave-icon">🏊</div>
   <div class="logo">WaveGuard</div>
   <div class="logo-sub">Lifeguard Scheduling · Season 2025</div>
@@ -1043,19 +1060,67 @@ const firebaseConfig = {
 // Initialize Firebase
 let db;
 function initFirebase(){
-  try {
-    if(typeof firebase === 'undefined') throw new Error('Firebase SDK not loaded');
-    if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-    db = firebase.database();
-    console.log('✅ Firebase connected');
-    boot(); // Start app only after Firebase is ready
-  } catch(e) {
-    console.error('❌ Firebase init failed:', e);
-    const d=document.createElement('div');
-    d.style.cssText='position:fixed;top:0;left:0;right:0;background:#ff6b4a;color:#fff;padding:1rem 1rem 1.2rem;z-index:9999;font-family:sans-serif;font-size:.88rem;text-align:center;line-height:1.5;';
-    d.innerHTML='⚠️ Could not connect to WaveGuard.<br>Check your internet connection and <a href="" style="color:#fff;font-weight:700;">refresh the page</a>.';
-    document.body.appendChild(d);
+  let attempts = 0;
+  const maxAttempts = 20; // 10 seconds total (20 x 500ms)
+
+  function tryInit(){
+    attempts++;
+    const statusEl = document.getElementById('loading-status');
+
+    if(typeof firebase === 'undefined'){
+      if(attempts < maxAttempts){
+        if(statusEl) statusEl.textContent = `Connecting… (${attempts})`;
+        setTimeout(tryInit, 500);
+        return;
+      }
+      // All retries failed — show friendly error with reload button
+      const ls = document.getElementById('loading-screen');
+      if(ls) ls.innerHTML = `
+        <div style="text-align:center;padding:2rem;font-family:'DM Sans',sans-serif;">
+          <div style="font-size:2rem;margin-bottom:1rem;">🌊</div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:3px;color:#2ec4e0;margin-bottom:.5rem;">WaveGuard</div>
+          <div style="color:#7a95a8;font-size:.85rem;margin-bottom:1.5rem;line-height:1.6;">
+            Having trouble connecting.<br>Check your internet connection and try again.
+          </div>
+          <button onclick="location.reload()" style="background:linear-gradient(135deg,#2ec4e0,#1a8ab0);color:#fff;border:none;border-radius:12px;padding:.85rem 2rem;font-size:1rem;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">
+            🔄 Tap to Retry
+          </button>
+        </div>`;
+      return;
+    }
+
+    try {
+      if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+      db = firebase.database();
+      console.log('✅ Firebase connected after', attempts, 'attempt(s)');
+      // Hide loading, show login
+      const ls = document.getElementById('loading-screen');
+      const login = document.getElementById('login-screen');
+      if(ls) ls.style.display = 'none';
+      if(login) login.style.display = 'flex';
+      boot();
+    } catch(e) {
+      console.error('Firebase init error:', e);
+      if(attempts < maxAttempts){
+        setTimeout(tryInit, 500);
+      } else {
+        const ls = document.getElementById('loading-screen');
+        if(ls) ls.innerHTML = `
+          <div style="text-align:center;padding:2rem;font-family:'DM Sans',sans-serif;">
+            <div style="font-size:2rem;margin-bottom:1rem;">🌊</div>
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:3px;color:#2ec4e0;margin-bottom:.5rem;">WaveGuard</div>
+            <div style="color:#7a95a8;font-size:.85rem;margin-bottom:1.5rem;line-height:1.6;">
+              Could not connect to the database.<br>Check your internet and try again.
+            </div>
+            <button onclick="location.reload()" style="background:linear-gradient(135deg,#2ec4e0,#1a8ab0);color:#fff;border:none;border-radius:12px;padding:.85rem 2rem;font-size:1rem;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">
+              🔄 Tap to Retry
+            </button>
+          </div>`;
+      }
+    }
   }
+
+  tryInit();
 }
 
 
@@ -1542,6 +1607,27 @@ async function postGroupMe(text){
   }
 }
 
+
+// ============================================================
+// BOOT — called after Firebase is ready
+// ============================================================
+function boot(){
+  // Firebase is already connected. Check if setup has been done.
+  try {
+    const stored = localStorage.getItem('wg_config');
+    if(stored){
+      const config = JSON.parse(stored);
+      if(config && config.setupDone) return; // login screen already visible
+    }
+  } catch(e){}
+  // Check Firebase
+  dbRef('config').get().then(snap=>{
+    if(!snap || !snap.exists() || !snap.val().setupDone){
+      showSetupPage();
+    }
+  }).catch(()=>{ showSetupPage(); });
+}
+
 // ============================================================
 // CONSTANTS
 // ============================================================
@@ -1784,6 +1870,9 @@ function toggleCodeVis(btn){
 }
 
 async function doLogin(){
+  // Ensure loading screen is hidden
+  const ls=document.getElementById('loading-screen');
+  if(ls) ls.style.display='none';
   const first=getVal('li-first').trim();
   const last =getVal('li-last').trim();
   const code =getVal('li-code').trim();
