@@ -329,6 +329,50 @@ select option{background:#0e2030;}
 .avail-guard-row{display:flex;align-items:center;justify-content:space-between;padding:.6rem 0;border-bottom:1px solid var(--border);font-size:.85rem;}
 .avail-guard-name{font-weight:500;}
 .avail-guard-sub{font-size:.72rem;color:var(--muted);}
+
+/* CUSTOM TYPE COLORS */
+:root {
+  --ctype-0:#b57bee;--ctype-1:#ee7bae;--ctype-2:#7beecc;
+  --ctype-3:#ee9f7b;--ctype-4:#7bb5ee;--ctype-5:#eedb7b;
+}
+.tb-ctype-0{background:rgba(181,123,238,.13);color:var(--ctype-0);}
+.tb-ctype-1{background:rgba(238,123,174,.13);color:var(--ctype-1);}
+.tb-ctype-2{background:rgba(123,238,204,.13);color:var(--ctype-2);}
+.tb-ctype-3{background:rgba(238,159,123,.13);color:var(--ctype-3);}
+.tb-ctype-4{background:rgba(123,181,238,.13);color:var(--ctype-4);}
+.tb-ctype-5{background:rgba(238,219,123,.13);color:var(--ctype-5);}
+.cal-cell.type-ctype-0::after{background:var(--ctype-0);}
+.cal-cell.type-ctype-1::after{background:var(--ctype-1);}
+.cal-cell.type-ctype-2::after{background:var(--ctype-2);}
+.cal-cell.type-ctype-3::after{background:var(--ctype-3);}
+.cal-cell.type-ctype-4::after{background:var(--ctype-4);}
+.cal-cell.type-ctype-5::after{background:var(--ctype-5);}
+.cal-cell.copied-day{outline:2px dashed var(--yellow);outline-offset:-2px;}
+
+/* CAUTION CHIP */
+.chip.caution::after{content:'⚠️';font-size:.65rem;margin-left:.2rem;}
+
+/* PRINT */
+@media print {
+  .app-header,.bottom-nav,.btn,.sheet-close,.overlay,
+  #mgr-cal-btns,button{display:none!important;}
+  body{background:#fff!important;color:#000!important;}
+  .cal-month-name{color:#000!important;}
+  .cal-hdr,.cal-cell{color:#000!important;}
+  .shift-card{background:#f5f5f5!important;border:1px solid #ccc!important;color:#000!important;}
+  .s-time,.s-guards,.s-note{color:#000!important;}
+  #print-schedule{display:block!important;}
+}
+#print-schedule{display:none;}
+.print-day{margin-bottom:1rem;page-break-inside:avoid;}
+.print-day-hdr{font-weight:700;font-size:.95rem;border-bottom:2px solid #333;padding-bottom:.3rem;margin-bottom:.4rem;}
+.print-shift{font-size:.85rem;margin-bottom:.3rem;padding:.2rem 0;}
+
+/* HOUR ADJUSTMENT */
+.adj-btn{background:rgba(255,209,102,.1);border:1px solid rgba(255,209,102,.28);color:var(--yellow);border-radius:8px;padding:.32rem .75rem;font-size:.77rem;font-family:'DM Sans',sans-serif;cursor:pointer;margin-top:.4rem;}
+
+/* GUARD AVAILABILITY ON CALENDAR */
+.avail-dot{width:4px;height:4px;background:var(--green);border-radius:50%;display:inline-block;margin-left:1px;vertical-align:middle;}
 </style>
 <!-- Firebase Compat SDK — gstatic is reliable from browsers -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -416,17 +460,7 @@ select option{background:#0e2030;}
         <span class="bb-icon">🤒</span>
         <span><span class="bb-strong">I Can't Make My Shift</span><span class="bb-small">Emergency alert → all guards + manager</span></span>
       </button>
-      <!-- Available to cover toggle -->
-      <div class="avail-toggle-row" style="margin-top:.6rem;">
-        <div>
-          <div class="avail-toggle-label">Available to Cover Today</div>
-          <div class="avail-toggle-sub">Let the manager know you can fill in if needed</div>
-        </div>
-        <label class="toggle-switch">
-          <input type="checkbox" id="avail-today-toggle" onchange="toggleAvailability(this.checked)"/>
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
+
     </div>
     <!-- GUARD CALENDAR -->
     <div class="screen" id="g-screen-calendar">
@@ -477,7 +511,10 @@ select option{background:#0e2030;}
       <div class="cb-row"><input type="checkbox" id="notif-reminders" checked onchange="saveNotifPrefs()"/><label style="text-transform:none;letter-spacing:0;font-size:.84rem;">Shift reminders</label></div>
       <div class="cb-row"><input type="checkbox" id="notif-alerts" checked onchange="saveNotifPrefs()"/><label style="text-transform:none;letter-spacing:0;font-size:.84rem;">Emergency coverage alerts</label></div>
     </div>
-      <div class="card-title" style="margin-top:.8rem;">ALL TIME OFF</div>
+      <div class="card-title" style="margin-top:.8rem;">YOUR AVAILABILITY</div>
+      <p style="color:var(--muted);font-size:.75rem;margin-bottom:.65rem;">Mark days you're free to cover. Browse the calendar and tap any day to toggle.</p>
+      <div id="g-avail-cal" style="margin-bottom:.8rem;"></div>
+      <div class="card-title">ALL TIME OFF</div>
       <p style="color:var(--muted);font-size:.73rem;margin-bottom:.65rem;">Everyone sees who's off. Only manager sees the reason.</p>
       <div id="g-timeoff-list"></div>
     </div>
@@ -553,6 +590,8 @@ select option{background:#0e2030;}
         <button class="btn btn-ghost" onclick="openCopyWeek()" style="margin-top:0">📋 Copy Week</button>
       </div>
       <button class="btn btn-ghost" onclick="openExcelImport()" style="width:100%;margin-top:.4rem">📊 Import from Excel</button>
+      <button class="btn btn-ghost" onclick="openWeekGlance()" style="width:100%;margin-top:.4rem">📅 Week at a Glance</button>
+      <button class="btn btn-ghost" onclick="printSchedule()" style="width:100%;margin-top:.4rem">🖨️ Print Schedule</button>
     </div>
     <!-- MGR TIME OFF -->
     <div class="screen" id="m-screen-timeoff">
@@ -573,7 +612,7 @@ select option{background:#0e2030;}
         <button class="btn btn-primary" onclick="mgrAddTimeOff()" style="margin-top:0">Mark as Approved Time Off</button>
       </div>
       <!-- Pending guard requests -->
-      <div class="card-title">PENDING GUARD REQUESTS</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem;"><div class="card-title" style="margin-bottom:0;">PENDING GUARD REQUESTS</div><button class="btn btn-sm btn-green" onclick="bulkApproveTO()">✓ Approve All</button></div>
       <div id="m-to-pending"></div>
       <div class="card-title" style="margin-top:.9rem;">ALL APPROVED / DENIED</div>
       <div id="m-to-all"></div>
@@ -594,23 +633,6 @@ select option{background:#0e2030;}
         <div id="m-staff-bk-list"></div>
         <button class="btn btn-ghost" onclick="openAddGuard('backup')" style="margin-top:.65rem">+ Add Backup Guard</button>
       </div>
-    </div>
-
-    <!-- MGR WEEKLY VIEW -->
-    <div class="screen" id="m-screen-week">
-      <div class="section-title">WEEK AT A GLANCE</div>
-      <div class="week-nav">
-        <button onclick="weekPrev()">‹</button>
-        <h2 id="week-label">THIS WEEK</h2>
-        <button onclick="weekNext()">›</button>
-      </div>
-      <div class="week-grid" id="week-grid"></div>
-      <!-- Season-wide stats -->
-      <div class="card-title">SHIFT DISTRIBUTION — FULL SEASON</div>
-      <div id="week-stats-global" class="week-stats"></div>
-      <!-- This week stats -->
-      <div class="card-title" style="margin-top:.6rem;">THIS WEEK</div>
-      <div id="week-stats-local" class="week-stats"></div>
     </div>
 
     <!-- MGR SETTINGS -->
@@ -642,6 +664,29 @@ select option{background:#0e2030;}
           </select>
         </div>
         <button class="btn btn-primary" onclick="saveSettings()" style="margin-top:0">Save</button>
+      </div>
+      <div class="card">
+        <div class="card-title">SEASON MONTHS</div>
+        <p style="color:var(--muted);font-size:.78rem;margin-bottom:.75rem;">Add or remove months from the season calendar. June, July, August are always included.</p>
+        <div class="chips" id="season-month-chips"></div>
+        <button class="btn btn-primary" onclick="saveSeasonMonths()" style="margin-top:.7rem;width:100%">Save Season Months</button>
+      </div>
+      <div class="card">
+        <div class="card-title">CUSTOM SHIFT TYPES</div>
+        <p style="color:var(--muted);font-size:.78rem;margin-bottom:.75rem;">Add recurring custom shift types that appear in the shift type dropdown.</p>
+        <div id="custom-types-list" style="margin-bottom:.7rem;"></div>
+        <div style="display:flex;gap:.5rem;">
+          <input type="text" id="new-custom-type" placeholder="e.g. Swim Lessons" style="flex:1;margin-bottom:0;"/>
+          <button class="btn btn-sm btn-primary" onclick="addCustomType()" style="margin-top:0;white-space:nowrap;">+ Add</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">PAYROLL</div>
+        <div class="fg"><label>Last Payroll Payout Date</label>
+          <input type="date" id="last-payout-date"/>
+        </div>
+        <p style="color:var(--muted);font-size:.75rem;margin-top:.3rem;">Hour adjustments dated before this won't affect the current payroll period.</p>
+        <button class="btn btn-primary" onclick="saveSettings()" style="margin-top:.5rem;width:100%">Save</button>
       </div>
     </div>
 
@@ -685,7 +730,6 @@ select option{background:#0e2030;}
     <button class="nav-btn" id="m-nav-timeoff" onclick="mNav('timeoff',this)"><div class="nav-icon">🗓</div><div class="nav-label">Time Off</div></button>
     <button class="nav-btn" id="m-nav-log" onclick="mNav('log',this)" style="position:relative"><div class="nav-icon">📋</div><div class="nav-label">Log</div><div class="notif-badge" id="m-notif-badge"></div></button>
     <button class="nav-btn" id="m-nav-payroll" onclick="mNav('payroll',this)"><div class="nav-icon">💵</div><div class="nav-label">Payroll</div></button>
-    <button class="nav-btn" id="m-nav-week" onclick="mNav('week',this)"><div class="nav-icon">📊</div><div class="nav-label">Week</div></button>
     <button class="nav-btn" id="m-nav-staff" onclick="mNav('staff',this)"><div class="nav-icon">👥</div><div class="nav-label">Staff</div></button>
   </nav>
 </div>
@@ -824,21 +868,6 @@ select option{background:#0e2030;}
   </div>
 </div>
 
-<!-- Counter-offer modal -->
-<div class="overlay" id="ov-counter">
-  <div class="sheet">
-    <div class="sheet-hdr"><div class="sheet-title">COUNTER-OFFER</div><button class="sheet-close" onclick="closeOv('ov-counter')">✕</button></div>
-    <div id="counter-ctx" class="info-box"></div>
-    <div class="fg"><label>Pick one of your shifts to offer</label><select id="counter-sel"></select></div>
-    <div class="fg"><label>Message</label><input type="text" id="counter-msg" placeholder="e.g. This one works better for me"/></div>
-    <div class="btn-row">
-      <button class="btn btn-primary" onclick="sendCounter()" style="margin-top:0">Send Counter-Offer</button>
-      <button class="btn btn-ghost" onclick="closeOv('ov-counter')" style="margin-top:0">Cancel</button>
-    </div>
-    <input type="hidden" id="counter-swap-id"/>
-  </div>
-</div>
-
 <!-- Add guard modal -->
 <div class="overlay" id="ov-addguard">
   <div class="sheet">
@@ -849,6 +878,7 @@ select option{background:#0e2030;}
     </div>
     <div class="fg"><label>Phone</label><input type="tel" id="ag-phone" placeholder="(555) 000-0000"/></div>
     <div class="fg"><label>Email (optional)</label><input type="email" id="ag-email"/></div>
+    <div class="fg"><label>Personal Access Code <span style="color:var(--muted);font-weight:400;font-size:.65rem;">(4 digits — leave blank to use shared code)</span></label><input type="text" id="ag-code" placeholder="e.g. 1234" maxlength="4" pattern="[0-9]{4}"/></div>
     <input type="hidden" id="ag-type" value="regular"/>
     <div class="btn-row">
       <button class="btn btn-primary" onclick="saveGuard()" style="margin-top:0">Add</button>
@@ -930,6 +960,64 @@ select option{background:#0e2030;}
     <div class="card-title">ACTIVE SWAP REQUESTS</div>
     <div id="prof-swaps" style="margin-bottom:1rem;"></div>
     <button class="btn btn-ghost" onclick="closeProfile()" style="width:100%;margin-top:0">Close</button>
+  </div>
+</div>
+
+
+<!-- Edit guard code modal -->
+<div class="overlay" id="ov-editcode">
+  <div class="sheet">
+    <div class="sheet-hdr"><div class="sheet-title">🔑 ASSIGN CODE</div><button class="sheet-close" onclick="closeOv('ov-editcode')">✕</button></div>
+    <p style="color:var(--muted);font-size:.82rem;margin-bottom:.9rem;">Assign a personal 4-digit code to this guard. Leave blank to use the shared team code.</p>
+    <div class="fg"><label>Guard</label><div id="editcode-name" style="color:#fff;font-weight:600;padding:.5rem 0;"></div></div>
+    <div class="fg"><label>Personal Code (4 digits)</label><input type="text" id="editcode-val" maxlength="4" pattern="[0-9]{4}" placeholder="e.g. 5678"/></div>
+    <div class="info-box">Current shared code: <strong id="editcode-shared"></strong></div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="saveGuardCode()" style="margin-top:0">Save Code</button>
+      <button class="btn btn-ghost" onclick="closeOv('ov-editcode')" style="margin-top:0">Cancel</button>
+    </div>
+    <input type="hidden" id="editcode-guard-id"/>
+  </div>
+</div>
+
+
+<!-- Week at a Glance overlay -->
+<div class="overlay" id="ov-week">
+  <div class="sheet" style="border-radius:18px 18px 0 0;max-height:90vh;">
+    <div class="sheet-hdr">
+      <div class="sheet-title">WEEK AT A GLANCE</div>
+      <button class="sheet-close" onclick="closeOv('ov-week')">✕</button>
+    </div>
+    <div class="week-nav" style="margin-bottom:.7rem;">
+      <button onclick="weekPrev()">‹</button>
+      <h2 id="week-label" style="font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:2px;">—</h2>
+      <button onclick="weekNext()">›</button>
+    </div>
+    <div class="week-grid" id="week-grid"></div>
+    <div class="card-title" style="margin-top:.5rem;">THIS WEEK — SHIFT COUNTS</div>
+    <div id="week-stats-local" class="week-stats"></div>
+    <div class="card-title" style="margin-top:.7rem;">FULL SEASON — SHIFT DISTRIBUTION</div>
+    <div id="week-stats-global" class="week-stats"></div>
+  </div>
+</div>
+
+
+<!-- Manual hour adjustment modal -->
+<div class="overlay" id="ov-adj-hours">
+  <div class="sheet">
+    <div class="sheet-hdr"><div class="sheet-title">⏱ ADJUST HOURS</div><button class="sheet-close" onclick="closeOv('ov-adj-hours')">✕</button></div>
+    <div class="fg"><label>Guard</label><select id="adj-guard-sel"></select></div>
+    <div class="row2">
+      <div class="fg"><label>Hours to Add/Remove</label><input type="number" id="adj-hours-val" step="0.25" placeholder="e.g. 2.5 or -1.5"/></div>
+      <div class="fg"><label>Date</label><input type="date" id="adj-hours-date" onchange="checkAdjDate()"/></div>
+    </div>
+    <div class="fg"><label>Description (optional)</label><input type="text" id="adj-hours-desc" placeholder="e.g. Forgot to clock in, training hours"/></div>
+    <div id="adj-payroll-note" class="info-box" style="display:none;"></div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="saveHourAdjustment()" style="margin-top:0">Apply Adjustment</button>
+      <button class="btn btn-ghost" onclick="closeOv('ov-adj-hours')" style="margin-top:0">Cancel</button>
+    </div>
+    <input type="hidden" id="adj-from-profile"/>
   </div>
 </div>
 
@@ -1053,6 +1141,36 @@ function weekNext(){
   renderWeekView();
 }
 
+// ============================================================
+// WEEK GLANCE HELPERS
+// ============================================================
+function getSeasonBounds(){
+  const yr=2026;
+  const minMonth=Math.min(...SEASON);
+  const maxMonth=Math.max(...SEASON);
+  return{minDate:new Date(yr,minMonth,1),maxDate:new Date(yr,maxMonth+1,0)};
+}
+function openWeekGlance(){
+  if(!_weekStart) _weekStart=getMonday(new Date());
+  // Clamp to season
+  const {minDate,maxDate}=getSeasonBounds();
+  if(_weekStart<getMonday(minDate)) _weekStart=getMonday(minDate);
+  if(_weekStart>maxDate) _weekStart=getMonday(maxDate);
+  renderWeekView(); openOv('ov-week');
+}
+function weekPrev(){
+  const prev=addDays(_weekStart,-7);
+  const {minDate}=getSeasonBounds();
+  if(prev<getMonday(minDate)) return;
+  _weekStart=prev; renderWeekView();
+}
+function weekNext(){
+  const next=addDays(_weekStart,7);
+  const {maxDate}=getSeasonBounds();
+  if(next>maxDate) return;
+  _weekStart=next; renderWeekView();
+}
+
 function renderWeekView(){
   const grid=el('week-grid');
   const statsG=el('week-stats-global');
@@ -1062,7 +1180,7 @@ function renderWeekView(){
   const weekDays=[];
   for(let i=0;i<7;i++) weekDays.push(addDays(_weekStart,i));
 
-  // Update label
+  const {minDate,maxDate}=getSeasonBounds();
   const labelStart=weekDays[0].toLocaleDateString('en-US',{month:'short',day:'numeric'});
   const labelEnd  =weekDays[6].toLocaleDateString('en-US',{month:'short',day:'numeric'});
   setText('week-label',`${labelStart} – ${labelEnd}`);
@@ -1070,21 +1188,22 @@ function renderWeekView(){
   const today=toDS(new Date());
   const allShifts=shiftsList();
   const guards=guardsList();
-
-  // ── WEEK GRID ───────────────────────────────────────────
   const DAY_SHORT=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
   grid.innerHTML=weekDays.map((d,i)=>{
     const ds=toDS(d);
-    const dayShifts=allShifts.filter(s=>s.date===ds);
+    const inSeason=d>=minDate&&d<=maxDate;
+    const dayShifts=inSeason?allShifts.filter(s=>s.date===ds):[];
     const isToday=ds===today;
-    let inner=dayShifts.length?dayShifts.map(sh=>{
-      const under=(sh.assigned||[]).length<sh.required;
-      const cls=under?'week-shift ws-under':'week-shift ws-'+(sh.type||'regular');
-      const names=(sh.assigned||[]).map(id=>{
-        const g=(DATA.guards||{})[id]; return g?g.first:'?';
-      }).join(', ');
-      return`<div class="${cls}">${fmt12(sh.start)}–${fmt12(sh.end)}<br>${names||'Unassigned'}${under?' ⚠️':''}</div>`;
-    }).join(''):`<div class="week-empty">—</div>`;
+    let inner=dayShifts.length
+      ?dayShifts.map(sh=>{
+          const under=(sh.assigned||[]).length<sh.required;
+          const typeKey=getShiftTypeKey?getShiftTypeKey(sh):sh.type;
+          const cls=under?'week-shift ws-under':`week-shift ws-${typeKey}`;
+          const names=(sh.assigned||[]).map(id=>{const g=(DATA.guards||{})[id];return g?g.first:'?';}).join(', ');
+          return`<div class="${cls}">${fmt12(sh.start)}-${fmt12(sh.end)}<br><span style="font-size:.55rem">${names||'—'}</span>${under?' ⚠️':''}</div>`;
+        }).join('')
+      :'<div class="week-empty">—</div>';
     return`<div class="week-day${isToday?' today-col':''}">
       <div class="week-day-hdr">${DAY_SHORT[i]}</div>
       <div class="week-day-date">${d.getDate()}</div>
@@ -1092,113 +1211,68 @@ function renderWeekView(){
     </div>`;
   }).join('');
 
-  // ── THIS WEEK STATS ──────────────────────────────────────
+  // THIS WEEK stats — sorted by count descending
   const weekDSs=weekDays.map(toDS);
   const weekShifts=allShifts.filter(s=>weekDSs.includes(s.date));
   const localCounts={};
   guards.forEach(g=>localCounts[g.id]=0);
-  weekShifts.forEach(sh=>(sh.assigned||[]).forEach(id=>{ if(localCounts[id]!==undefined) localCounts[id]++; }));
-
-  const understaffedDays=weekShifts.filter(s=>(s.assigned||[]).length<s.required).length;
-
-  let localHTML='';
-  if(!weekShifts.length){
-    localHTML='<p class="empty">No shifts this week.</p>';
-  } else {
-    // Stats per guard this week
-    const vals=guards.filter(g=>g.type==='regular').map(g=>localCounts[g.id]||0);
-    const maxVal=Math.max(...vals,1);
-    localHTML=guards.filter(g=>g.type==='regular').map(g=>{
-      const cnt=localCounts[g.id]||0;
-      const pct=Math.round((cnt/maxVal)*100);
-      return`<div class="stat-row">
-        <div class="stat-name">${g.first} ${g.last}</div>
-        <div class="stat-bar-wrap"><div class="stat-bar" style="width:${pct}%"></div></div>
-        <div class="stat-count">${cnt} shift${cnt!==1?'s':''}</div>
-      </div>`;
-    }).join('');
-    if(understaffedDays){
-      localHTML+=`<div class="discrepancy-box disc-bad" style="margin-top:.6rem;">⚠️ ${understaffedDays} understaffed shift${understaffedDays>1?'s':''} this week</div>`;
-    }
-  }
-  statsL.innerHTML=localHTML;
-
-  // ── SEASON-WIDE STATS ────────────────────────────────────
-  const seasonCounts={};
-  guards.forEach(g=>seasonCounts[g.id]=0);
-  allShifts.forEach(sh=>(sh.assigned||[]).forEach(id=>{ if(seasonCounts[id]!==undefined) seasonCounts[id]++; }));
-
+  weekShifts.forEach(sh=>(sh.assigned||[]).forEach(id=>{if(localCounts[id]!==undefined)localCounts[id]++;}));
+  const understaffed=weekShifts.filter(s=>(s.assigned||[]).length<s.required).length;
   const regGuards=guards.filter(g=>g.type==='regular');
-  const seasonVals=regGuards.map(g=>seasonCounts[g.id]||0);
-  const seasonMax=Math.max(...seasonVals,1);
-  const seasonMin=Math.min(...seasonVals.filter(v=>v>0),0);
-  const seasonAvg=seasonVals.reduce((a,b)=>a+b,0)/(seasonVals.filter(v=>v>0).length||1);
-  const discrepancy=seasonMax-seasonMin;
+  const sortedLocal=[...regGuards].sort((a,b)=>(localCounts[b.id]||0)-(localCounts[a.id]||0));
+  const localMax=Math.max(...sortedLocal.map(g=>localCounts[g.id]||0),1);
 
-  let discMsg='', discCls='disc-ok';
-  if(discrepancy===0 && seasonMax===0){
-    discMsg='No shifts assigned yet.'; discCls='disc-warn';
-  } else if(discrepancy<=2){
-    discMsg=`✓ Very even distribution — max difference is ${discrepancy} shift${discrepancy!==1?'s':''}.`; discCls='disc-ok';
-  } else if(discrepancy<=5){
-    discMsg=`⚠️ Slight imbalance — ${discrepancy} shift difference between most and least assigned.`; discCls='disc-warn';
-  } else {
-    discMsg=`⚠️ Large imbalance — ${discrepancy} shift gap. Consider re-running auto-schedule.`; discCls='disc-bad';
-  }
-
-  let globalHTML=`<div class="discrepancy-box ${discCls}">${discMsg}</div>`;
-  globalHTML+=regGuards.map(g=>{
-    const cnt=seasonCounts[g.id]||0;
-    const pct=Math.round((cnt/seasonMax)*100);
-    const isMost=cnt===seasonMax&&seasonMax>0;
-    const isLeast=cnt===seasonMin&&seasonMin<seasonMax&&cnt<seasonAvg;
-    const barCls=isLeast&&discrepancy>3?'stat-bar warn-bar':'stat-bar';
-    const flag=isMost?' 🏆':isLeast&&discrepancy>3?' 🔻':'';
+  let localHTML=sortedLocal.map(g=>{
+    const cnt=localCounts[g.id]||0;
+    const pct=Math.round((cnt/localMax)*100);
     return`<div class="stat-row">
-      <div class="stat-name">${g.first} ${g.last}${flag}</div>
-      <div class="stat-bar-wrap"><div class="${barCls}" style="width:${pct}%"></div></div>
-      <div class="stat-count${isLeast&&discrepancy>3?' stat-warn':''}">${cnt} shift${cnt!==1?'s':''}</div>
+      <div class="stat-name">${g.first} ${g.last}</div>
+      <div class="stat-bar-wrap"><div class="stat-bar" style="width:${pct}%"></div></div>
+      <div class="stat-count">${cnt}</div>
     </div>`;
   }).join('');
+  if(understaffed) localHTML=`<div class="discrepancy-box disc-bad" style="margin-bottom:.5rem;">⚠️ ${understaffed} shift${understaffed>1?'s are':' is'} understaffed this week — not enough guards assigned.</div>`+localHTML;
+  if(!weekShifts.length) localHTML='<p class="empty">No shifts scheduled this week.</p>';
+  statsL.innerHTML=localHTML;
 
-  // backup guards separate
+  // SEASON stats — sorted by count descending, plain English
+  const seasonCounts={};
+  guards.forEach(g=>seasonCounts[g.id]=0);
+  allShifts.forEach(sh=>(sh.assigned||[]).forEach(id=>{if(seasonCounts[id]!==undefined)seasonCounts[id]++;}));
+  const sortedSeason=[...regGuards].sort((a,b)=>(seasonCounts[b.id]||0)-(seasonCounts[a.id]||0));
+  const sVals=sortedSeason.map(g=>seasonCounts[g.id]||0);
+  const sMax=Math.max(...sVals,1), sMin=Math.min(...sVals.filter(v=>v>0),0);
+  const gap=sMax-sMin;
+
+  let discHTML='',discCls='disc-ok';
+  if(sMax===0){
+    discHTML='No shifts have been assigned yet for the season.'; discCls='disc-warn';
+  } else if(gap<=2){
+    discHTML=`Shifts are evenly distributed — the biggest difference between any two guards is only ${gap} shift${gap!==1?'s':''}.`;
+  } else if(gap<=5){
+    discHTML=`${sortedSeason[0]?.first} has the most shifts (${sMax}) and ${sortedSeason[sortedSeason.length-1]?.first} has the fewest (${sMin}). That's a ${gap}-shift difference — slightly uneven but manageable.`; discCls='disc-warn';
+  } else {
+    discHTML=`${sortedSeason[0]?.first} has ${sMax} shifts while ${sortedSeason[sortedSeason.length-1]?.first} only has ${sMin} — a ${gap}-shift gap. This is a significant imbalance. Run Auto-Schedule again or reassign some shifts manually.`; discCls='disc-bad';
+  }
+
+  let globalHTML=`<div class="discrepancy-box ${discCls}">${discHTML}</div>`;
+  globalHTML+=sortedSeason.map(g=>{
+    const cnt=seasonCounts[g.id]||0;
+    const pct=sMax>0?Math.round((cnt/sMax)*100):0;
+    const isLeast=cnt===sMin&&gap>3&&cnt<(sMax/2+1);
+    return`<div class="stat-row">
+      <div class="stat-name">${g.first} ${g.last}</div>
+      <div class="stat-bar-wrap"><div class="stat-bar${isLeast?' warn-bar':''}" style="width:${pct}%"></div></div>
+      <div class="stat-count${isLeast?' stat-warn':''}">${cnt} shift${cnt!==1?'s':''}</div>
+    </div>`;
+  }).join('');
   const bkGuards=guards.filter(g=>g.type==='backup');
   if(bkGuards.length){
-    globalHTML+=`<div class="card-title" style="margin-top:.7rem;">BACKUP GUARDS</div>`;
-    globalHTML+=bkGuards.map(g=>{
-      const cnt=seasonCounts[g.id]||0;
-      return`<div class="stat-row"><div class="stat-name">${g.first} ${g.last} ⭐</div><div class="stat-bar-wrap"><div class="stat-bar" style="width:${cnt>0?'40%':'5%'}"></div></div><div class="stat-count">${cnt} shift${cnt!==1?'s':''}</div></div>`;
-    }).join('');
+    globalHTML+=`<div class="card-title" style="margin-top:.6rem;font-size:.55rem;">BACKUP GUARDS</div>`;
+    globalHTML+=bkGuards.map(g=>{const cnt=seasonCounts[g.id]||0;return`<div class="stat-row"><div class="stat-name">${g.first} ⭐</div><div class="stat-bar-wrap"><div class="stat-bar" style="width:${cnt>0?Math.round(cnt/sMax*100):3}%"></div></div><div class="stat-count">${cnt}</div></div>`;}).join('');
   }
-
   statsG.innerHTML=globalHTML;
 }
-
-// ============================================================
-// FEATURE 2: AVAILABLE TO COVER
-// ============================================================
-async function toggleAvailability(isAvailable){
-  if(!L.user?.id) return;
-  const today = toDS(new Date());
-  const key = `availability/${L.user.id}_${today}`;
-  if(isAvailable){
-    await dbRef(key).set({
-      guardId: L.user.id,
-      date: today,
-      availableAt: new Date().toISOString(),
-    });
-    toast('Marked as available to cover today ✓');
-    logEvent('available_to_cover',
-      `${L.user.first} ${L.user.last}`,
-      `${L.user.first} ${L.user.last} is available to cover today`,
-      {date: today}
-    );
-  } else {
-    await dbRef(key).remove().catch(()=>{});
-    toast('Availability removed');
-  }
-}
-
 function loadAvailabilityToggle(){
   if(!L.user?.id) return;
   const today = toDS(new Date());
@@ -1375,6 +1449,81 @@ function closeProfile(){
   }
 }
 
+
+// ============================================================
+// STAFF MANAGEMENT
+// ============================================================
+function guardRowHTML(g){
+  const pCode=g.personalCode?`🔑 ${g.personalCode}`:'🔑 shared';
+  const lSeen=g.lastSeen
+    ? `Last login: ${new Date(g.lastSeen).toLocaleDateString('en-US',{month:'short',day:'numeric'})} ${new Date(g.lastSeen).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`
+    : 'Never logged in';
+  return`<div class="guard-row" style="align-items:flex-start;padding:.8rem 0;">
+    <div style="cursor:pointer;flex:1;display:flex;align-items:flex-start;gap:.68rem;" onclick="openProfile('${g.id}')">
+      <div class="g-av${g.type==='backup'?' backup-av':''}">${g.first[0]}</div>
+      <div>
+        <div class="g-name">${g.first} ${g.last}</div>
+        <div class="g-meta">${pCode}</div>
+        <div class="g-meta">${lSeen}</div>
+        <span class="g-tag ${g.type==='backup'?'tag-bk':'tag-reg'}">${g.type==='backup'?'Backup':'Regular'}</span>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:.3rem;margin-left:.5rem;flex-shrink:0;">
+      <button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();openEditCode('${g.id}')" style="font-size:.7rem;padding:.3rem .6rem;">🔑</button>
+      <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();removeGuard('${g.id}')">✕</button>
+    </div>
+  </div>`;}
+
+function renderStaff(){
+  const rl=el('m-staff-reg-list'), bl=el('m-staff-bk-list');
+  if(!rl||!bl) return;
+  const reg=guardsList().filter(g=>g.type==='regular');
+  const bk =guardsList().filter(g=>g.type==='backup');
+  rl.innerHTML=reg.length?reg.map(guardRowHTML).join(''):'<p class="empty">No guards yet.</p>';
+  bl.innerHTML=bk.length?bk.map(guardRowHTML).join(''):'<p class="empty">None.</p>';
+}
+
+function staffTab(type,btn){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active')); btn.classList.add('active');
+  const rp=el('m-staff-regular'), bp=el('m-staff-backup');
+  if(rp) rp.style.display=type==='regular'?'block':'none';
+  if(bp) bp.style.display=type==='backup'?'block':'none';
+}
+
+function openAddGuard(type){
+  setText('ag-title',type==='backup'?'ADD BACKUP GUARD':'ADD LIFEGUARD');
+  setVal('ag-type',type);
+  ['ag-first','ag-last','ag-phone','ag-email','ag-code'].forEach(id=>setVal(id,''));
+  openOv('ov-addguard');
+}
+
+async function saveGuard(){
+  const first=getVal('ag-first').trim(), last=getVal('ag-last').trim();
+  const phone=getVal('ag-phone').trim(), email=getVal('ag-email').trim();
+  const type=getVal('ag-type');
+  const personalCode=getVal('ag-code').trim();
+  if(!first||!last){ toast('Name required','err'); return; }
+  if(personalCode && !/^\d{4}$/.test(personalCode)){ toast('Personal code must be exactly 4 digits','err'); return; }
+  const id=newKey();
+  await dbSet(`guards/${id}`,{id,first,last,phone,email,type,personalCode,notifPrefs:{groupme:true,reminders:true,alerts:true}});
+  logEvent('guard_added','Manager',`${type==='backup'?'Backup guard':'Lifeguard'} added: ${first} ${last}`,{});
+  closeOv('ov-addguard'); toast(`${first} added!`);
+}
+
+async function removeGuard(id){
+  const g=(DATA.guards||{})[id];
+  confirmAction('REMOVE GUARD','Remove this guard from all shifts and the team?','Remove Guard', async ()=>{
+    await dbRemove(`guards/${id}`);
+    for(const [sid,sh] of Object.entries(DATA.shifts||{})){
+      if((sh.assigned||[]).includes(id)){
+        await dbUpdate(`shifts/${sid}`,{assigned:(sh.assigned||[]).filter(a=>a!==id)});
+      }
+    }
+    logEvent('guard_removed','Manager',`Guard removed: ${g?g.first+' '+g.last:'?'}`,{});
+    toast('Guard removed');
+  });
+}
+
 // ============================================================
 // GROUPME INTEGRATION
 // ============================================================
@@ -1396,7 +1545,8 @@ async function postGroupMe(text){
 // ============================================================
 // CONSTANTS
 // ============================================================
-const SEASON       = [5,6,7]; // Jun=5, Jul=6, Aug=7, year 2026
+let SEASON = [5,6,7]; // mutable — manager can add months
+let CUSTOM_TYPES = []; // loaded from Firebase
 const MONTHS       = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const DAY_HDRS     = ['Su','Mo','Tu','We','Th','Fr','Sa'];
 const TYPE_LABELS  = {regular:'Regular',party:'Party',swim:'Swim Meet'};
@@ -1676,41 +1826,53 @@ async function doLogin(){
   try { localStorage.setItem('wg_config', JSON.stringify(config)); } catch(e){}
 
   if(code===config.managerCode){
+    // Verify name matches what was entered during setup
+    const mFirst=(config.managerFirst||'').toLowerCase();
+    const mLast =(config.managerLast||'').toLowerCase();
+    if(mFirst && mLast && (first.toLowerCase()!==mFirst || last.toLowerCase()!==mLast)){
+      showLoginError(`Wrong name for manager account. Try again.`);
+      return;
+    }
     L.user = { id:'manager', first, last, role:'manager' };
     startListeners();
     mountManager(first, last);
 
-  } else if(code===config.guardCode){
-    // Find matching guard — try Firebase, fall back to cached
+  } else {
+    // Could be a guard using shared code OR personal code
     let guards = {};
     try {
       const gsnap = await dbRef('guards').get();
       if(gsnap && gsnap.exists()) guards = gsnap.val();
     } catch(e){ console.warn('Guards fetch failed:', e); }
-
     if(!Object.keys(guards).length){
-      try {
-        const cached = localStorage.getItem('wg_guards');
-        if(cached) guards = JSON.parse(cached);
-      } catch(e){}
+      try { const cached=localStorage.getItem('wg_guards'); if(cached) guards=JSON.parse(cached); } catch(e){}
     }
 
+    // Find guard by name
     const match = Object.entries(guards).find(([id,g])=>
       g.first.toLowerCase()===first.toLowerCase() &&
       g.last.toLowerCase()===last.toLowerCase()
     );
     if(!match){
-      showLoginError('Name not found. Ask your manager to add you to the team.');
+      showLoginError('Name not found or wrong access code. Check with your manager.');
+      if(loginBtn){ loginBtn.disabled=false; loginBtn.textContent='Dive In →'; }
       return;
     }
     const [gid, gdata] = match;
-    L.user = { id:gid, first:gdata.first, last:gdata.last, role:'guard' };
+
+    // Personal code takes priority; fall back to shared team code
+    const personalCode = gdata.personalCode||'';
+    const validCode = personalCode ? code===personalCode : code===config.guardCode;
+    if(!validCode){
+      showLoginError('Wrong access code. Check with your manager.');
+      if(loginBtn){ loginBtn.disabled=false; loginBtn.textContent='Dive In →'; }
+      return;
+    }
+
+    L.user = { id: gid, first: gdata.first, last: gdata.last, role:'guard' };
     DATA.guards = guards;
     startListeners();
     mountGuard(gdata.first, gdata.last);
-
-  } else {
-    showLoginError('Wrong access code. Try again.');
   }
 }
 
@@ -1781,7 +1943,7 @@ function gNav(screen, btn){
   if(screen==='timeoff') { renderGuardTimeOff(); loadNotifPrefs(); }
 }
 function mNav(screen, btn){
-  ['home','calendar','timeoff','staff','settings','log','payroll','week'].forEach(s=>{
+  ['home','calendar','timeoff','staff','settings','log','payroll'].forEach(s=>{
     removeClass('m-screen-'+s,'active'); removeClass('m-nav-'+s,'active');
   });
   addClass('m-screen-'+screen,'active');
@@ -1790,7 +1952,7 @@ function mNav(screen, btn){
   if(screen==='staff')   renderStaff();
   if(screen==='log')     { renderEventLog(); markNotifsRead(); }
   if(screen==='payroll') initPayroll();
-  if(screen==='week')    initWeekView();
+
 }
 
 // ============================================================
@@ -1852,7 +2014,7 @@ function shiftCardHTML(sh, isMgr, ds){
   const names=(sh.assigned||[]).map(id=>gName(id)).join(', ');
   const under=(sh.assigned||[]).length<sh.required;
   const tLabel=sh.type==='custom'?sh.customType:(TYPE_LABELS[sh.type]||sh.type);
-  const tCls='tb-'+(sh.type==='custom'?'custom':sh.type);
+  const tCls=getShiftTypeBadgeClass(sh);
   let cardCls='shift-card'+(sh.type==='party'?' party-card':sh.type==='swim'?' swim-card':under?' under-card':'');
   let h=`<div class="${cardCls}">
     <span class="type-badge ${tCls}">${tLabel}</span>
@@ -1927,14 +2089,7 @@ function onTypeChange(){
   if(TYPE_REQ[t]) setVal('sh-req',String(TYPE_REQ[t]));
 }
 
-function buildAssignChips(current){
-  L.assignChipSelected=[...current];
-  const c=el('sh-assign-chips'); if(!c) return;
-  c.innerHTML=guardsList().map(g=>{
-    const on=L.assignChipSelected.includes(g.id);
-    return`<div class="chip${on?' on':''}" onclick="toggleAssignChip('${g.id}',this)">${g.first} ${g.last}${g.type==='backup'?' ⭐':''}</div>`;
-  }).join('');
-}
+
 
 function toggleAssignChip(id, chipEl){
   const date=getVal('sh-date');
@@ -2295,416 +2450,457 @@ function renderSwaps(){
 function swapCardHTML(r,dir,myId){
   const fromG=(DATA.guards||{})[r.from];
   const shift=(DATA.shifts||{})[r.shiftId];
-  const offer=r.offerShiftId?(DATA.shifts||{})[r.offerShiftId]:null;
-  const rl=MAX_ROUNDS-r.rounds;
-  let badge=r.type==='give'?`<span class="badge b-yellow">📢 Give Away</span>`:r.status==='countered'?`<span class="badge b-coral">↩ Counter</span>`:`<span class="badge b-blue">🔄 Swap</span>`;
+  let badge=r.type==='give'?`<span class="badge b-yellow">📢 Give Away</span>`:`<span class="badge b-blue">🔄 Swap</span>`;
   let h=`<div class="swap-card">${badge}`;
   if(dir==='in'){
-    h+=`<div class="sw-head">${r.type==='give'?fromG?.first+' is giving away a shift':fromG?.first+' wants to swap'}</div>`;
+    h+=`<div class="sw-head">${r.type==='give'?fromG?.first+' is giving away a shift':fromG?.first+' wants to swap with you'}</div>`;
     h+=`<div class="sw-detail">Shift: ${shift?`${fmtShort(shift.date)} · ${fmt12(shift.start)}–${fmt12(shift.end)}`:'—'}</div>`;
-    if(offer) h+=`<div class="sw-detail">Offering: ${fmtShort(offer.date)} · ${fmt12(offer.start)}–${fmt12(offer.end)}</div>`;
     if(r.message) h+=`<div class="sw-msg">"${r.message}"</div>`;
     h+=`<div class="sw-actions">`;
-    if(r.type==='give') h+=`<button class="btn btn-sm btn-green" onclick="acceptGive('${r.id}')">✓ Accept</button>`;
-    else if(r.status==='pending') h+=`<button class="btn btn-sm btn-primary" onclick="openCounter('${r.id}')">Offer a Shift Back</button>`;
-    else if(r.status==='countered'&&r.to===myId){ h+=`<button class="btn btn-sm btn-green" onclick="acceptCounter('${r.id}')">✓ Accept Offer</button>`; if(rl>0) h+=`<button class="btn btn-sm btn-ghost" onclick="openCounter('${r.id}')">↩ Counter Again</button>`; }
+    if(r.type==='give') h+=`<button class="btn btn-sm btn-green" onclick="acceptGive('${r.id}')">✓ Accept Shift</button>`;
+    else h+=`<button class="btn btn-sm btn-green" onclick="acceptSwapSimple('${r.id}')">✓ Accept Swap</button>`;
     h+=`<button class="btn btn-sm btn-danger" onclick="declineSwap('${r.id}')">✕ Decline</button></div>`;
-    if(r.rounds>0) h+=`<div class="sw-rounds">Round ${r.rounds}/${MAX_ROUNDS}</div>`;
   } else {
     const toG=(DATA.guards||{})[r.to];
-    h+=`<div class="sw-head">${r.type==='give'?'You broadcast a give-away':`You requested a swap${toG?' with '+toG.first:''}`}</div>`;
+    h+=`<div class="sw-head">${r.type==='give'?'You broadcast a give-away':`Swap request to ${toG?toG.first:'?'}`}</div>`;
     h+=`<div class="sw-detail">${shift?`${fmtShort(shift.date)} · ${fmt12(shift.start)}–${fmt12(shift.end)}`:'—'}</div>`;
-    if(offer) h+=`<div class="sw-detail">Their offer: ${fmtShort(offer.date)} · ${fmt12(offer.start)}–${fmt12(offer.end)}</div>`;
-    const slbl={pending:'⏳ Pending',broadcast:'📢 Broadcast',countered:'↩ Counter received'}[r.status]||r.status;
-    h+=`<span class="badge b-gray">${slbl}</span>`;
-    if(r.status==='countered'&&r.from===myId){ h+=`<div class="sw-actions"><button class="btn btn-sm btn-green" onclick="acceptCounter('${r.id}')">✓ Accept</button>${rl>0?`<button class="btn btn-sm btn-ghost" onclick="openCounter('${r.id}')">↩ Counter</button>`:''}<button class="btn btn-sm btn-danger" onclick="declineSwap('${r.id}')">Cancel</button></div>`; }
-    else h+=`<div class="sw-actions"><button class="btn btn-sm btn-danger" onclick="declineSwap('${r.id}')">Cancel</button></div>`;
-    if(r.rounds>0) h+=`<div class="sw-rounds">Round ${r.rounds}/${MAX_ROUNDS}</div>`;
+    h+=`<span class="badge b-gray">${r.type==='give'?'📢 Broadcast':'⏳ Pending response'}</span>`;
+    h+=`<div class="sw-actions"><button class="btn btn-sm btn-danger" onclick="declineSwap('${r.id}')">Cancel</button></div>`;
   }
   return h+'</div>';
 }
 
-function openCounter(swapId){
-  L.counterSwapId=swapId;
+async function acceptSwapSimple(swapId){
+  // Simple accept — swap the shift assignments
   const r=(DATA.swaps||{})[swapId]; if(!r) return;
-  const fromSh=(DATA.shifts||{})[r.shiftId];
-  const ctx=el('counter-ctx');
-  if(ctx) ctx.innerHTML=`Countering: <strong>${fromSh?`${fmtShort(fromSh.date)} · ${fmt12(fromSh.start)}–${fmt12(fromSh.end)}`:'—'}</strong>`;
-  const today=new Date().toISOString().slice(0,10);
-  const mine=shiftsList().filter(s=>s.date>=today&&(s.assigned||[]).includes(L.user?.id)&&s.id!==r.shiftId);
-  const sel=el('counter-sel');
-  if(sel) sel.innerHTML=mine.length?mine.map(s=>`<option value="${s.id}">${fmtShort(s.date)} · ${fmt12(s.start)}–${fmt12(s.end)}</option>`).join(''):'<option value="">No available shifts</option>';
-  setVal('counter-msg',''); setVal('counter-swap-id',swapId);
-  closeOv('ov-swap'); openOv('ov-counter');
-}
-
-async function sendCounter(){
-  const swapId=getVal('counter-swap-id');
-  const offerShiftId=getVal('counter-sel');
-  const msg=getVal('counter-msg');
-  const r=(DATA.swaps||{})[swapId]; if(!r) return;
-  if(!offerShiftId){ toast('Select a shift to offer','err'); return; }
-  if(r.rounds>=MAX_ROUNDS){ toast('Max rounds reached','warn'); return; }
-  const update_data={offerShiftId,message:msg,status:'countered',rounds:r.rounds+1,from:r.to,to:r.from};
-  await dbUpdate(`swaps/${swapId}`,update_data);
-  logEvent('counter_offer',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} sent a counter-offer (round ${r.rounds+1})`,{});
-  closeOv('ov-counter'); toast('Counter-offer sent!');
-}
-
-async function acceptGive(swapId){
-  const r=(DATA.swaps||{})[swapId]; if(!r) return;
-  const shift=(DATA.shifts||{})[r.shiftId];
-  if(shift){
-    const assigned=[...(shift.assigned||[])].filter(id=>id!==r.from);
-    if(!assigned.includes(L.user.id)) assigned.push(L.user.id);
+  const sh1=(DATA.shifts||{})[r.shiftId];
+  if(sh1){
+    const assigned=[...(sh1.assigned||[])];
+    // Replace requester with accepter
+    const fromIdx=assigned.indexOf(r.from);
+    if(fromIdx>=0) assigned[fromIdx]=r.to;
+    else if(!assigned.includes(r.to)) assigned.push(r.to);
+    // Remove accepter from their own if they were already there weirdly
     await dbUpdate(`shifts/${r.shiftId}`,{assigned});
   }
   await dbUpdate(`swaps/${swapId}`,{status:'completed'});
-  for(const [sid,s] of Object.entries(DATA.swaps||{})){
-    if(s.type==='give'&&s.shiftId===r.shiftId&&sid!==swapId&&s.status==='broadcast')
-      await dbUpdate(`swaps/${sid}`,{status:'cancelled'});
-  }
-  const giver=(DATA.guards||{})[r.from];
-  logEvent('give_accepted',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} accepted a shift from ${giver?giver.first+' '+giver.last:'?'}`,{});
-  toast('Shift accepted! ✓');
-}
-
-async function acceptCounter(swapId){
-  const r=(DATA.swaps||{})[swapId]; if(!r) return;
-  const sh1=(DATA.shifts||{})[r.shiftId], sh2=r.offerShiftId?(DATA.shifts||{})[r.offerShiftId]:null;
-  if(sh1&&sh2){
-    const a1=[...(sh1.assigned||[])].filter(id=>id!==r.to); if(!a1.includes(r.from)) a1.push(r.from);
-    const a2=[...(sh2.assigned||[])].filter(id=>id!==r.from); if(!a2.includes(r.to)) a2.push(r.to);
-    await dbUpdate(`shifts/${r.shiftId}`,{assigned:a1});
-    await dbUpdate(`shifts/${r.offerShiftId}`,{assigned:a2});
-  }
-  await dbUpdate(`swaps/${swapId}`,{status:'completed'});
-  logEvent('swap_accepted',`${L.user.first} ${L.user.last}`,`Shift swap completed between ${L.user.first} ${L.user.last} and ${gName(r.to===L.user.id?r.from:r.to)}`,{});
-  toast('Swap done! ✓');
-}
-
-async function declineSwap(swapId){
-  await dbUpdate(`swaps/${swapId}`,{status:'declined'});
-  logEvent('swap_declined',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} declined a swap/give request`,{});
-  toast('Declined.');
+  logEvent('swap_accepted',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} accepted a swap with ${gName(r.from)}`,{});
+  toast('Swap accepted! ✓');
 }
 
 // ============================================================
-// TIME OFF — GUARD
+// MANUAL HOUR ADJUSTMENT
 // ============================================================
-async function submitTimeOff(){
-  const from=getVal('g-to-from'), to=getVal('g-to-to'), reason=getVal('g-to-reason').trim();
-  if(!from||!to){ toast('Select a date range','err'); return; }
-  if(to<from){ toast('End must be after start','err'); return; }
+function openHourAdjustment(guardId){
+  const sel=el('adj-guard-sel');
+  if(sel){
+    sel.innerHTML=guardsList().map(g=>`<option value="${g.id}">${g.first} ${g.last}</option>`).join('');
+    if(guardId) sel.value=guardId;
+  }
+  setVal('adj-hours-val','');
+  setVal('adj-hours-date',toDS(new Date()));
+  setVal('adj-hours-desc','');
+  setVal('adj-from-profile', guardId||'');
+  hide('adj-payroll-note');
+  openOv('ov-adj-hours');
+}
+
+// adj-hours-date listener wired via HTML onchange attribute
+function checkAdjDate(){
+  const date=getVal('adj-hours-date');
+  const lastPayout=DATA.config?.lastPayoutDate||'';
+  const note=el('adj-payroll-note');
+  if(!note) return;
+  if(lastPayout && date<=lastPayout){
+    note.textContent=`This date is before or on the last payout (${lastPayout}). This adjustment will appear in the timesheet history but will NOT affect the current payroll period.`;
+    note.style.display='block';
+  } else {
+    note.textContent=`This date is within the current pay period — this adjustment WILL affect the current payroll total.`;
+    note.style.background='rgba(45,212,160,.06)'; note.style.borderColor='rgba(45,212,160,.18)'; note.style.color='var(--green)';
+    note.style.display='block';
+  }
+}
+
+async function saveHourAdjustment(){
+  const guardId=getVal('adj-guard-sel');
+  const hrs=parseFloat(getVal('adj-hours-val'));
+  const date=getVal('adj-hours-date');
+  const desc=getVal('adj-hours-desc').trim();
+  if(!guardId){toast('Select a guard','err');return;}
+  if(isNaN(hrs)||hrs===0){toast('Enter a non-zero hour value','err');return;}
+  if(!date){toast('Select a date','err');return;}
+  const g=(DATA.guards||{})[guardId];
+  const gname=g?`${g.first} ${g.last}`:'?';
+  const sign=hrs>0?'+':'';
   const id=newKey();
-  await dbSet(`timeOff/${id}`,{id,guardId:L.user.id,from,to,reason,status:'pending'});
-  logEvent('time_off_request',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} requested time off: ${from===to?from:from+' → '+to}`,{});
-  setVal('g-to-from',''); setVal('g-to-to',''); setVal('g-to-reason','');
-  toast('Time off submitted!');
+  const entry={
+    guardId, date, in:'—', out:'—',
+    hrs: Math.abs(hrs),
+    adjustment: hrs, // signed
+    isAdjustment: true,
+    description: desc||'Manual adjustment'
+  };
+  await dbSet(`allTsLog/${id}`, entry);
+  logEvent('clock_out','Manager',
+    `Manual hour adjustment for ${gname}: ${sign}${hrs} hrs on ${date}${desc?' — '+desc:''}`,
+    {guardId,hrs,date}
+  );
+  closeOv('ov-adj-hours');
+  toast(`${sign}${hrs} hrs applied to ${gname}`);
 }
 
-function renderGuardTimeOff(){
-  const el2=el('g-timeoff-list'); if(!el2) return;
-  const sorted=[...toList()].sort((a,b)=>a.from.localeCompare(b.from));
-  if(!sorted.length){ el2.innerHTML='<p class="empty">No requests yet.</p>'; return; }
-  const isMe=t=>t.guardId===L.user?.id;
-  el2.innerHTML=sorted.map(t=>{
-    const g=(DATA.guards||{})[t.guardId];
-    const ds=t.from===t.to?t.from:`${t.from} → ${t.to}`;
-    return`<div class="to-row"><div>
-      <div class="to-name">${g?`${g.first} ${g.last}`:'?'}${isMe(t)?' <span style="color:var(--muted);font-size:.7rem;">(you)</span>':''}</div>
-      <div class="to-dates">${ds}</div>
-      <span class="status-pill sp-${t.status}">${t.status}</span>
-    </div>${isMe(t)&&t.status==='pending'?`<button class="btn btn-sm btn-danger" onclick="cancelTO('${t.id}')">Cancel</button>`:''}</div>`;
-  }).join('');
-}
-
-async function cancelTO(id){ await dbRemove(`timeOff/${id}`); toast('Request cancelled.'); }
-
 // ============================================================
-// TIME OFF — MANAGER
+// BULK APPROVE TIME OFF
 // ============================================================
-function renderMgrTimeOff(){
-  const pendEl=el('m-to-pending'), allEl=el('m-to-all');
-  if(!pendEl||!allEl) return;
+async function bulkApproveTO(){
   const pending=toList().filter(t=>t.status==='pending');
-  const all=[...toList()].sort((a,b)=>a.from.localeCompare(b.from));
-  pendEl.innerHTML=pending.length?pending.map(t=>mgrTOCard(t,true)).join(''):'<p class="empty">No pending requests.</p>';
-  allEl.innerHTML=all.length?all.map(t=>mgrTOCard(t,false)).join(''):'<p class="empty">No requests.</p>';
-}
-
-function mgrTOCard(t, showActions){
-  const g=(DATA.guards||{})[t.guardId];
-  const ds=t.from===t.to?t.from:`${t.from} → ${t.to}`;
-  return`<div class="to-row"><div>
-    <div class="to-name">${g?`${g.first} ${g.last}`:'?'}</div>
-    <div class="to-dates">${ds}</div>
-    ${t.reason?`<div class="to-reason">📝 ${t.reason}</div>`:''}
-    <span class="status-pill sp-${t.status}">${t.status}</span>
-    ${showActions?`<div class="to-actions"><button class="btn btn-sm btn-green" onclick="openTOApproval('${t.id}')">✓ Review</button></div>`:''}
-  </div></div>`;
-}
-
-function openTOApproval(id){
-  const t=(DATA.timeOff||{})[id]; if(!t) return;
-  const g=(DATA.guards||{})[t.guardId];
-  const ds=t.from===t.to?t.from:`${t.from} → ${t.to}`;
-  const body=el('toa-body');
-  if(body) body.innerHTML=`<div style="margin-bottom:.9rem;">
-    <div style="font-weight:600;font-size:.95rem;margin-bottom:.25rem;">${g?g.first+' '+g.last:'?'}</div>
-    <div style="color:var(--muted);font-size:.82rem;">${ds}</div>
-    ${t.reason?`<div style="color:var(--sand);font-size:.78rem;font-style:italic;margin-top:.25rem;">📝 ${t.reason}</div>`:''}
-  </div>`;
-  setVal('toa-id',id); openOv('ov-toapprove');
-}
-
-function doApproveTO(approve){ const id=getVal('toa-id'); quickTO(id,approve); closeOv('ov-toapprove'); }
-
-async function quickTO(id, approve){
-  const t=(DATA.timeOff||{})[id]; if(!t) return;
-  await dbUpdate(`timeOff/${id}`,{status:approve?'approved':'denied'});
-  const g=(DATA.guards||{})[t.guardId];
-  const nm=g?`${g.first} ${g.last}`:'?';
-  const rng=t.from===t.to?t.from:`${t.from} → ${t.to}`;
-  logEvent(approve?'time_off_approved':'time_off_denied','Manager',`Manager ${approve?'approved':'denied'} time off for ${nm}: ${rng}`,{});
-  if(approve){
-    const conflicts=shiftsList().filter(s=>s.date>=t.from&&s.date<=t.to&&(s.assigned||[]).includes(t.guardId));
-    if(conflicts.length) toast(`✓ Approved — ⚠️ ${nm} is on ${conflicts.length} shift(s) in this range`,'warn');
-    else toast('Time off approved ✓');
-  } else toast('Request denied');
-}
-
-// ============================================================
-// STAFF
-// ============================================================
-function renderStaff(){
-  const rl=el('m-staff-reg-list'), bl=el('m-staff-bk-list');
-  if(!rl||!bl) return;
-  const reg=guardsList().filter(g=>g.type==='regular');
-  const bk =guardsList().filter(g=>g.type==='backup');
-  rl.innerHTML=reg.length?reg.map(guardRowHTML).join(''):'<p class="empty">None yet.</p>';
-  bl.innerHTML=bk.length?bk.map(guardRowHTML).join(''):'<p class="empty">None yet.</p>';
-}
-
-function guardRowHTML(g){
-  return`<div class="guard-row" style="cursor:pointer" onclick="openProfile('${g.id}')" title="Tap to view profile"><div class="guard-left">
-    <div class="g-av${g.type==='backup'?' backup-av':''}">${g.first[0]}</div>
-    <div><div class="g-name">${g.first} ${g.last}</div>
-    <div class="g-meta">${g.phone||''}${g.email?' · '+g.email:''}</div>
-    <span class="g-tag ${g.type==='backup'?'tag-bk':'tag-reg'}">${g.type==='backup'?'Backup':'Regular'}</span></div>
-  </div><button class="btn btn-sm btn-danger" onclick="removeGuard('${g.id}')">Remove</button></div>`;
-}
-
-function staffTab(type,btn){
-  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active')); btn.classList.add('active');
-  const rp=el('m-staff-regular'), bp=el('m-staff-backup');
-  if(rp) rp.style.display=type==='regular'?'block':'none';
-  if(bp) bp.style.display=type==='backup'?'block':'none';
-}
-
-function openAddGuard(type){
-  setText('ag-title',type==='backup'?'ADD BACKUP GUARD':'ADD LIFEGUARD');
-  setVal('ag-type',type);
-  ['ag-first','ag-last','ag-phone','ag-email'].forEach(id=>setVal(id,''));
-  openOv('ov-addguard');
-}
-
-async function saveGuard(){
-  const first=getVal('ag-first').trim(), last=getVal('ag-last').trim();
-  const phone=getVal('ag-phone').trim(), email=getVal('ag-email').trim();
-  const type=getVal('ag-type');
-  if(!first||!last){ toast('Name required','err'); return; }
-  const id=newKey();
-  await dbSet(`guards/${id}`,{id,first,last,phone,email,type,notifPrefs:{groupme:true,reminders:true,alerts:true}});
-  logEvent('guard_added','Manager',`${type==='backup'?'Backup guard':'Lifeguard'} added: ${first} ${last}`,{});
-  closeOv('ov-addguard'); toast(`${first} added!`);
-}
-
-async function removeGuard(id){
-  const g=(DATA.guards||{})[id];
-  confirmAction('REMOVE GUARD','Remove this guard from all shifts and the team?','Remove Guard', async ()=>{
-    await dbRemove(`guards/${id}`);
-    for(const [sid,sh] of Object.entries(DATA.shifts||{})){
-      if((sh.assigned||[]).includes(id)){
-        await dbUpdate(`shifts/${sid}`,{assigned:(sh.assigned||[]).filter(a=>a!==id)});
-      }
-    }
-    logEvent('guard_removed','Manager',`Guard removed: ${g?g.first+' '+g.last:'?'}`,{});
-    toast('Guard removed');
-  });
-}
-
-// ============================================================
-// NOTIFICATIONS
-// ============================================================
-function saveNotifPrefs(){
-  if(!L.user?.id) return;
-  dbUpdate(`guards/${L.user.id}`,{notifPrefs:{groupme:getCheck('notif-groupme'),reminders:getCheck('notif-reminders'),alerts:getCheck('notif-alerts')}});
-  toast('Notification preferences saved');
-}
-function loadNotifPrefs(){
-  const g=(DATA.guards||{})[L.user?.id]; if(!g) return;
-  const p=g.notifPrefs||{groupme:true,reminders:true,alerts:true};
-  setCheck('notif-groupme',p.groupme); setCheck('notif-reminders',p.reminders); setCheck('notif-alerts',p.alerts);
-}
-
-// ============================================================
-// EVENT LOG
-// ============================================================
-async function logEvent(type,actor,msg,meta={}){
-  const id=newKey();
-  await dbSet(`eventLog/${id}`,{id,ts:new Date().toISOString(),type,actor,msg,meta});
-}
-
-const LOG_ICONS={swap_request:'🔄',swap_accepted:'✅',swap_declined:'❌',give_request:'📢',give_accepted:'✅',counter_offer:'↩️',sick_alert:'🤒',clock_in:'⏱',clock_out:'⏹',time_off_request:'🗓',time_off_approved:'✅',time_off_denied:'❌',shift_added:'➕',shift_edited:'✏️',shift_deleted:'🗑',guard_added:'👤',guard_removed:'👤',closure_alert:'⚠️',auto_schedule:'⚡'};
-const LOG_COLORS={swap_accepted:'log-green',give_accepted:'log-green',time_off_approved:'log-green',swap_declined:'log-red',time_off_denied:'log-red',shift_deleted:'log-red',guard_removed:'log-red',sick_alert:'log-coral',closure_alert:'log-yellow',clock_in:'log-blue',clock_out:'log-blue'};
-
-function tsLabel(iso){ const d=new Date(iso); return d.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); }
-
-function renderEventLog(){
-  const logEl=el('m-event-log'); if(!logEl) return;
-  const filter=getVal('log-filter')||'all';
-  const search=(getVal('log-search')||'').toLowerCase();
-  let entries=Object.values(DATA.eventLog||{}).sort((a,b)=>b.ts.localeCompare(a.ts));
-  if(filter!=='all') entries=entries.filter(e=>e.type.startsWith(filter)||e.type===filter);
-  if(search) entries=entries.filter(e=>e.msg.toLowerCase().includes(search)||e.actor.toLowerCase().includes(search));
-  if(!entries.length){ logEl.innerHTML='<p class="empty">No events yet.</p>'; return; }
-  logEl.innerHTML=entries.map(e=>`<div class="log-entry ${LOG_COLORS[e.type]||''}">
-    <div class="log-icon">${LOG_ICONS[e.type]||'📋'}</div>
-    <div class="log-body"><div class="log-msg">${e.msg}</div><div class="log-meta">${e.actor} · ${tsLabel(e.ts)}</div></div>
-  </div>`).join('');
-}
-
-function setLogFilter(val,btn){
-  setVal('log-filter',val);
-  document.querySelectorAll('.log-filters .tab').forEach(t=>t.classList.remove('active'));
-  if(btn) btn.classList.add('active');
-  renderEventLog();
-}
-
-function updateNotifBadge(){
-  const unread=Object.values(DATA.notifications||{}).filter(n=>!n.read).length;
-  const badge=el('m-notif-badge');
-  if(badge){ badge.textContent=unread>0?String(unread):''; badge.style.display=unread>0?'flex':'none'; }
-}
-
-async function markNotifsRead(){
+  if(!pending.length){toast('No pending requests','warn');return;}
   const updates={};
-  Object.keys(DATA.notifications||{}).forEach(k=>{ updates[`notifications/${k}/read`]=true; });
-  if(Object.keys(updates).length) await db.ref(DB_ROOT).update(updates);
-}
-
-function exportEventLog(){
-  const entries=Object.values(DATA.eventLog||{}).sort((a,b)=>a.ts.localeCompare(b.ts));
-  if(!entries.length){ toast('No events to export','err'); return; }
-  const rows=[['Timestamp','Actor','Type','Description'],...entries.map(e=>[new Date(e.ts).toLocaleString(),e.actor,e.type.replace(/_/g,' '),'"'+e.msg+'"'])];
-  downloadCSV('waveguard_event_log.csv',rows); toast('Event log exported!');
+  pending.forEach(t=>{ updates[`timeOff/${t.id}/status`]='approved'; });
+  await db.ref(DB_ROOT).update(updates);
+  logEvent('time_off_approved','Manager',`Bulk approved ${pending.length} time off request${pending.length>1?'s':''}`,{});
+  toast(`✓ ${pending.length} request${pending.length>1?'s':''} approved`);
 }
 
 // ============================================================
-// PAYROLL
+// PRINT SCHEDULE
 // ============================================================
-function initPayroll(){
-  const now=new Date();
-  const fd=new Date(now.getFullYear(),now.getMonth(),1).toISOString().slice(0,10);
-  const ld=new Date(now.getFullYear(),now.getMonth()+1,0).toISOString().slice(0,10);
-  const pf=el('pay-from'), pt=el('pay-to');
-  if(pf&&!pf.value) pf.value=fd; if(pt&&!pt.value) pt.value=ld;
-  renderPayroll();
-}
-
-function renderPayroll(){
-  const from=getVal('pay-from'), to=getVal('pay-to');
-  const wrap=el('payroll-table-wrap'), btns=el('payroll-btns');
-  if(!wrap) return;
-  if(!from||!to){ wrap.innerHTML='<p class="empty">Select a date range and tap Generate.</p>'; if(btns) btns.style.display='none'; return; }
-  const rate=parseFloat(DATA.config?.hourlyRate)||15;
-  const guardTotals={};
-  guardsList().forEach(g=>{ guardTotals[g.id]={guard:g,entries:[],totalHrs:0}; });
-  Object.values(DATA.allTsLog||{}).filter(e=>e.date>=from&&e.date<=to).forEach(e=>{
-    if(guardTotals[e.guardId]){ guardTotals[e.guardId].entries.push(e); guardTotals[e.guardId].totalHrs+=e.hrs; }
+function printSchedule(){
+  const allShifts=shiftsList().sort((a,b)=>a.date.localeCompare(b.date));
+  const dayMap={};
+  allShifts.forEach(sh=>{
+    if(!dayMap[sh.date]) dayMap[sh.date]=[];
+    dayMap[sh.date].push(sh);
   });
-  const rows=Object.values(guardTotals).filter(r=>r.entries.length>0);
-  const grand=rows.reduce((s,r)=>s+r.totalHrs,0);
-  if(!rows.length){ wrap.innerHTML='<p class="empty">No hours logged in this period.</p>'; if(btns) btns.style.display='none'; return; }
-  let html=`<div style="overflow-x:auto;"><table class="pay-table"><thead><tr><th>Guard</th><th>Shifts</th><th>Hours</th><th>Rate</th><th>Pay</th></tr></thead><tbody>`;
-  rows.forEach(r=>{ html+=`<tr><td><strong>${r.guard.first} ${r.guard.last}</strong></td><td>${r.entries.length}</td><td class="td-hrs">${r.totalHrs.toFixed(2)}</td><td>$${rate.toFixed(2)}/hr</td><td class="td-pay">$${(r.totalHrs*rate).toFixed(2)}</td></tr>`; });
-  html+=`</tbody><tfoot><tr><td colspan="2"><strong>TOTAL</strong></td><td class="td-hrs">${grand.toFixed(2)} hrs</td><td></td><td class="td-pay">$${(grand*rate).toFixed(2)}</td></tr></tfoot></table></div>`;
-  html+=`<details style="margin-top:.8rem;"><summary style="cursor:pointer;color:var(--muted);font-size:.8rem;padding:.4rem 0;">▼ Detailed breakdown</summary>`;
-  rows.forEach(r=>{
-    html+=`<div style="margin-top:.6rem;"><div class="card-title">${r.guard.first} ${r.guard.last}</div><table class="pay-table"><thead><tr><th>Date</th><th>In</th><th>Out</th><th>Hours</th></tr></thead><tbody>`;
-    r.entries.forEach(e=>{ html+=`<tr><td>${e.date}</td><td>${e.in}</td><td>${e.out}</td><td class="td-hrs">${e.hrs.toFixed(2)}</td></tr>`; });
-    html+=`</tbody></table></div>`;
-  });
-  html+=`</details>`;
-  wrap.innerHTML=html; if(btns) btns.style.display='block';
+  const html=Object.entries(dayMap).map(([date,shifts])=>{
+    const dayLabel=new Date(date+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+    const shiftRows=shifts.map(sh=>{
+      const names=(sh.assigned||[]).map(id=>gName(id)).join(', ')||'Unassigned';
+      const hrs=timeToHours(sh.start,sh.end);
+      const type=sh.type==='custom'?sh.customType:(TYPE_LABELS[sh.type]||sh.type);
+      return`<div class="print-shift"><strong>${fmt12(sh.start)} – ${fmt12(sh.end)}</strong> · ${type} · ${hrs}h &nbsp;|&nbsp; ${names}${sh.arriveTime?' (Arrive by '+fmt12(sh.arriveTime)+')':''}</div>`;
+    }).join('');
+    return`<div class="print-day"><div class="print-day-hdr">${dayLabel}</div>${shiftRows}</div>`;
+  }).join('');
+  const win=window.open('','_blank');
+  win.document.write(`<!DOCTYPE html><html><head><title>WaveGuard Season Schedule</title>
+    <style>body{font-family:sans-serif;padding:2rem;max-width:800px;margin:0 auto;}
+    .print-day{margin-bottom:1.5rem;page-break-inside:avoid;}
+    .print-day-hdr{font-weight:700;font-size:1rem;border-bottom:2px solid #333;padding-bottom:.3rem;margin-bottom:.5rem;}
+    .print-shift{font-size:.88rem;margin-bottom:.3rem;padding:.2rem 0;border-bottom:1px solid #eee;}
+    h1{text-align:center;margin-bottom:2rem;}
+    @media print{button{display:none;}}
+    </style></head><body>
+    <h1>WaveGuard — Season 2026 Schedule</h1>
+    <p style="text-align:center;color:#666;margin-bottom:2rem;">Printed ${new Date().toLocaleDateString()}</p>
+    <button onclick="window.print()" style="margin-bottom:1.5rem;padding:.5rem 1.5rem;cursor:pointer;">🖨️ Print</button>
+    ${html||'<p>No shifts scheduled yet.</p>'}
+    </body></html>`);
+  win.document.close();
 }
 
-function exportPayroll(){
-  const from=getVal('pay-from'), to=getVal('pay-to');
-  const rate=parseFloat(DATA.config?.hourlyRate)||15;
-  const rows=[['Guard','Type','Date','Clock In','Clock Out','Hours','Rate','Pay']];
-  Object.values(DATA.allTsLog||{}).filter(e=>e.date>=from&&e.date<=to).forEach(e=>{
-    const g=(DATA.guards||{})[e.guardId];
-    rows.push([g?`${g.first} ${g.last}`:'Unknown',g?.type||'',e.date,e.in,e.out,e.hrs.toFixed(2),`$${rate.toFixed(2)}`,`$${(e.hrs*rate).toFixed(2)}`]);
-  });
-  if(rows.length<=1){ toast('No data to export','err'); return; }
-  downloadCSV(`waveguard_payroll_${from}_to_${to}.csv`,rows); toast('Payroll exported!');
+function timeToHours(start,end){
+  const [sh,sm]=start.split(':').map(Number);
+  const [eh,em]=end.split(':').map(Number);
+  return ((eh*60+em)-(sh*60+sm))/60;
 }
 
 // ============================================================
-// SETTINGS
+// COPY DAY INDICATOR on calendar
 // ============================================================
+function buildMonthWithCopyIndicator(year,month,isMgr){
+  const first=new Date(year,month,1).getDay();
+  const days=new Date(year,month+1,0).getDate();
+  const today=new Date();
+  let cells='';
+  for(let i=0;i<first;i++) cells+=`<div class="cal-cell blank"></div>`;
+  for(let d=1;d<=days;d++){
+    const ds=`${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const ds_shifts=shiftsList().filter(s=>s.date===ds);
+    const isToday=today.getDate()===d&&today.getMonth()===month&&today.getFullYear()===year;
+    const isSel=L.selectedDay===ds;
+    const isCopied=L.copiedDay===ds;
+    const hasShift=ds_shifts.length>0;
+    const under=ds_shifts.some(s=>(s.assigned||[]).length<s.required);
+    let typeClass='';
+    if(ds_shifts.length===1) typeClass=' '+getCalDotClass(ds_shifts[0]);
+    else if(ds_shifts.length>1) typeClass=' multi-type';
+    let cls='cal-cell'+(isToday?' today':'')+(isSel?' selected':'')+(hasShift?' has-shift'+typeClass:'')+(under?' understaffed':'')+(isCopied?' copied-day':'');
+    cells+=`<div class="${cls}" onclick="openDayPopup('${ds}',${isMgr})">${d}</div>`;
+  }
+  return`<div class="cal-month"><div class="cal-month-name">${ALL_MONTHS[month].toUpperCase()} ${year}</div>
+    <div class="cal-grid">${[...Array(7)].map((_,i)=>`<div class="cal-hdr">${['Su','Mo','Tu','We','Th','Fr','Sa'][i]}</div>`).join('')}${cells}</div></div>`;
+}
+
+// Override buildMonth to use copy indicator version
+const _origBuildMonth = buildMonth;
+function buildMonth(year,month,isMgr){ return buildMonthWithCopyIndicator(year,month,isMgr); }
+
+// ============================================================
+// SETTINGS — save/load last payout date
+// ============================================================
+// Override saveSettings to also save lastPayoutDate
+const _origSaveSettings = saveSettings;
 async function saveSettings(){
   const rate=parseFloat(getVal('m-rate'))||15;
   const gme=getVal('m-gme').trim();
   const rhr=parseFloat(getVal('m-reminder'))||2;
-  await dbUpdate('config',{hourlyRate:rate,groupmeBotId:gme,reminderHrs:rhr});
+  const lastPayout=getVal('last-payout-date')||'';
+  await dbUpdate('config',{hourlyRate:rate,groupmeBotId:gme,reminderHrs:rhr,lastPayoutDate:lastPayout});
   toast('Settings saved!');
 }
-function testGroupMe(){ if(!getVal('m-gme').trim()){ toast('Enter Bot ID first','err'); return; } toast('Test message sent! ✓'); }
 
 // ============================================================
-// CSV DOWNLOAD
+// HOOK INTO mountManager / mountGuard
 // ============================================================
-function downloadCSV(filename,rows){
-  const csv=rows.map(r=>r.map(v=>{ const s=String(v); return s.includes(',')? '"'+s.replace(/"/g,'""')+'"':s; }).join(',')).join('\n');
-  const blob=new Blob([csv],{type:'text/csv'});
-  const url=URL.createObjectURL(blob); const a=document.createElement('a');
-  a.href=url; a.download=filename; a.click(); URL.revokeObjectURL(url);
+const _origMountManager = mountManager;
+function mountManager(first, last){
+  _origMountManager(first, last);
+  loadCustomTypes();
+  loadSeasonMonths();
+}
+
+const _origMountGuard = mountGuard;
+function mountGuard(first, last){
+  _origMountGuard(first, last);
+  updateLastSeen();
+  startAvailMapListener();
+}
+
+// Wire settings screen
+const _origMNav = mNav;
+function mNav(screen, btn){
+  _origMNav(screen, btn);
+  if(screen==='settings'){
+    renderSeasonMonthChips();
+    renderCustomTypesList();
+    const lp=el('last-payout-date');
+    if(lp&&DATA.config?.lastPayoutDate) lp.value=DATA.config.lastPayoutDate;
+  }
+}
+
+// Wire guard timeoff to render avail cal
+const _origGNav = gNav;
+function gNav(screen, btn){
+  _origGNav(screen, btn);
+  if(screen==='timeoff') renderGuardAvailCal();
+}
+
+// Wire payroll screen to show adj button
+// Override renderPayroll to add adjust button
+const _origRenderPayroll = renderPayroll;
+function renderPayroll(){
+  _origRenderPayroll();
+  // Add adjust buttons after table renders
+  setTimeout(()=>{
+    const wrap=el('payroll-table-wrap'); if(!wrap) return;
+    const adjSection=document.createElement('div');
+    adjSection.style.marginTop='.7rem';
+    adjSection.innerHTML=`<button class="btn btn-yellow" onclick="openHourAdjustment(null)" style="width:100%;margin-top:0">⏱ Manually Adjust Guard Hours</button>`;
+    if(!wrap.nextElementSibling?.querySelector('.btn-yellow')){
+      wrap.parentNode.insertBefore(adjSection, wrap.nextSibling);
+    }
+  },100);
+}
+
+// Also add adj button to profile modal
+const _origOpenProfile = openProfile;
+function openProfile(guardId){
+  _origOpenProfile(guardId);
+  // Add adjust hours button to profile
+  setTimeout(()=>{
+    const closeBtn=document.querySelector('#ov-profile .btn-ghost');
+    if(closeBtn && !document.getElementById('prof-adj-btn')){
+      const adjBtn=document.createElement('button');
+      adjBtn.id='prof-adj-btn';
+      adjBtn.className='adj-btn';
+      adjBtn.style.width='100%';
+      adjBtn.textContent='⏱ Adjust Hours';
+      adjBtn.onclick=()=>{ closeProfile(); openHourAdjustment(guardId); };
+      closeBtn.parentNode.insertBefore(adjBtn, closeBtn);
+    }
+  },50);
+}
+
+// Update last-seen on guard login
+async function updateLastSeen(){
+  if(L.user?.id && L.user.role==='guard'){
+    await dbRef(`guards/${L.user.id}/lastSeen`).set(new Date().toISOString()).catch(()=>{});
+  }
+}
+
+
+// ============================================================
+// EDIT GUARD CODE
+// ============================================================
+function openEditCode(guardId){
+  const g=(DATA.guards||{})[guardId]; if(!g) return;
+  const nameEl=el('editcode-name'); if(nameEl) nameEl.textContent=`${g.first} ${g.last}`;
+  setVal('editcode-val', g.personalCode||'');
+  setVal('editcode-guard-id', guardId);
+  const shared=el('editcode-shared');
+  if(shared) shared.textContent=DATA.config?.guardCode||'(not set)';
+  openOv('ov-editcode');
+}
+async function saveGuardCode(){
+  const guardId=getVal('editcode-guard-id');
+  const code=getVal('editcode-val').trim();
+  if(code && !/^\d{4}$/.test(code)){ toast('Code must be exactly 4 digits','err'); return; }
+  await dbRef(`guards/${guardId}/personalCode`).set(code||null);
+  const g=(DATA.guards||{})[guardId];
+  logEvent('guard_added','Manager',`Code updated for ${g?g.first+' '+g.last:'guard'}: ${code?'personal code set':'using shared code'}`,{});
+  closeOv('ov-editcode');
+  toast(code?'Personal code set!':'Guard will use shared code');
 }
 
 // ============================================================
-// BOOT — instant check from localStorage, no Firebase wait
+// CUSTOM SHIFT TYPES
 // ============================================================
-function boot(){
-  // Check localStorage immediately — no network round trip
-  try {
-    const stored = localStorage.getItem('wg_config');
-    if(stored){
-      const config = JSON.parse(stored);
-      if(config && config.setupDone){
-        // Setup done — show login screen (already visible by default)
-        return;
-      }
-    }
-  } catch(e){}
+function getShiftTypeKey(sh){
+  if(['regular','party','swim'].includes(sh.type)) return sh.type;
+  const idx=CUSTOM_TYPES.indexOf(sh.type);
+  return idx>=0?`ctype-${idx%6}`:'custom';
+}
+function getShiftTypeBadgeClass(sh){
+  if(sh.type==='regular') return 'tb-regular';
+  if(sh.type==='party')   return 'tb-party';
+  if(sh.type==='swim')    return 'tb-swim';
+  const idx=CUSTOM_TYPES.indexOf(sh.type);
+  return idx>=0?`tb-ctype-${idx%6}`:'tb-custom';
+}
+function getCalDotClass(sh){
+  if(sh.type==='regular') return 'type-regular';
+  if(sh.type==='party')   return 'type-party';
+  if(sh.type==='swim')    return 'type-swim';
+  const idx=CUSTOM_TYPES.indexOf(sh.type);
+  return idx>=0?`type-ctype-${idx%6}`:'type-custom';
+}
+function rebuildShiftTypeDropdown(){
+  const sel=el('sh-type'); if(!sel) return;
+  const core=[{val:'regular',label:'Regular Shift'},{val:'party',label:'Party'},{val:'swim',label:'Swim Meet'}];
+  sel.innerHTML=core.map(o=>`<option value="${o.val}">${o.label}</option>`).join('')
+    +CUSTOM_TYPES.map(t=>`<option value="${t}">${t}</option>`).join('')
+    +`<option value="custom">Custom (one-off)…</option>`;
+}
+async function addCustomType(){
+  const name=getVal('new-custom-type').trim();
+  if(!name){toast('Enter a type name','err');return;}
+  if(CUSTOM_TYPES.includes(name)){toast('Type already exists','warn');return;}
+  CUSTOM_TYPES.push(name);
+  await dbRef('customTypes').set(CUSTOM_TYPES);
+  setVal('new-custom-type','');
+  renderCustomTypesList(); rebuildShiftTypeDropdown();
+  toast(`"${name}" added to shift types!`);
+}
+async function removeCustomType(name){
+  CUSTOM_TYPES=CUSTOM_TYPES.filter(t=>t!==name);
+  await dbRef('customTypes').set(CUSTOM_TYPES.length?CUSTOM_TYPES:null);
+  renderCustomTypesList(); rebuildShiftTypeDropdown();
+  toast('Shift type removed');
+}
+function renderCustomTypesList(){
+  const el2=el('custom-types-list'); if(!el2) return;
+  if(!CUSTOM_TYPES.length){el2.innerHTML='<p class="empty" style="margin-bottom:0;">No custom types yet.</p>';return;}
+  el2.innerHTML=CUSTOM_TYPES.map((t,i)=>`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:.4rem 0;border-bottom:1px solid var(--border);">
+      <span class="type-badge tb-ctype-${i%6}">${t}</span>
+      <button class="btn btn-sm btn-danger" onclick="removeCustomType('${t}')">Remove</button>
+    </div>`).join('');
+}
+async function loadCustomTypes(){
+  try{ const snap=await dbRef('customTypes').get(); CUSTOM_TYPES=snap&&snap.exists()?snap.val():[]; if(!Array.isArray(CUSTOM_TYPES)) CUSTOM_TYPES=[]; }catch(e){ CUSTOM_TYPES=[]; }
+  rebuildShiftTypeDropdown();
+}
 
-  // No local config — check Firebase in background
-  // Show setup screen after short delay if Firebase also has no config
-  const t = setTimeout(()=>{ showSetupPage(); }, 1500);
-  dbRef('config').get().then(snap=>{
-    clearTimeout(t);
-    if(!snap || !snap.exists() || !snap.val().setupDone){
-      showSetupPage();
-    }
-    // else: setup done, login screen stays visible
-  }).catch(()=>{
-    clearTimeout(t);
-    showSetupPage(); // Can't reach Firebase, assume first time
+// ============================================================
+// SEASON MONTHS
+// ============================================================
+const ALL_MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+const CORE_MONTHS=[5,6,7];
+function renderSeasonMonthChips(){
+  const c=el('season-month-chips'); if(!c) return;
+  const options=[3,4,5,6,7,8,9,10];
+  c.innerHTML=options.map(m=>{
+    const isCore=CORE_MONTHS.includes(m), isOn=SEASON.includes(m);
+    return`<div class="chip${isOn?' on':''}" onclick="${isCore?'':` toggleSeasonMonth(${m},this)`}" title="${isCore?'Always included':'Click to toggle'}">${ALL_MONTHS[m]}${isCore?' 🔒':''}</div>`;
+  }).join('');
+}
+function toggleSeasonMonth(month,chip){
+  if(SEASON.includes(month)){ if(SEASON.length<=1){toast('Need at least one month','err');return;} SEASON=SEASON.filter(m=>m!==month); }
+  else { SEASON=[...SEASON,month].sort((a,b)=>a-b); }
+  chip.classList.toggle('on',SEASON.includes(month));
+}
+async function saveSeasonMonths(){
+  await dbRef('config/seasonMonths').set(SEASON);
+  refreshCals(); toast('Season months saved!');
+}
+async function loadSeasonMonths(){
+  try{ const snap=await dbRef('config/seasonMonths').get(); if(snap&&snap.exists()){ const s=snap.val(); if(Array.isArray(s)&&s.length) SEASON=s; } }catch(e){}
+}
+
+// ============================================================
+// GUARD AVAILABILITY ON CALENDAR
+// ============================================================
+function renderGuardAvailCal(){
+  const c=el('g-avail-cal'); if(!c) return;
+  c.innerHTML=SEASON.map(m=>buildAvailMonth(2026,m)).join('');
+}
+function buildAvailMonth(year,month){
+  const first=new Date(year,month,1).getDay();
+  const days=new Date(year,month+1,0).getDate();
+  const todayDS=toDS(new Date());
+  let cells='';
+  for(let i=0;i<first;i++) cells+=`<div class="cal-cell blank"></div>`;
+  for(let d=1;d<=days;d++){
+    const ds=`${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const key=`${L.user?.id}_${ds}`;
+    const isAvail=(DATA.availMap||{})[key];
+    const isPast=ds<todayDS;
+    let cls='cal-cell'+(isAvail?' selected':'');
+    cells+=`<div class="${cls}" onclick="${isPast?'':(`toggleGuardAvail('${ds}',this)`)}" style="${isPast?'cursor:default;opacity:.4;':''}">${d}${isAvail?'<span style="display:block;font-size:.4rem;color:var(--green)">✓avail</span>':''}</div>`;
+  }
+  return`<div class="cal-month" style="margin-bottom:1.2rem;"><div class="cal-month-name">${ALL_MONTHS[month]}</div><div class="cal-grid">${[...Array(7)].map((_,i)=>`<div class="cal-hdr">${['Su','Mo','Tu','We','Th','Fr','Sa'][i]}</div>`).join('')}${cells}</div></div>`;
+}
+async function toggleGuardAvail(ds,cellEl){
+  if(!L.user?.id) return;
+  const key=`${L.user.id}_${ds}`;
+  if(!DATA.availMap) DATA.availMap={};
+  const isNowAvail=!DATA.availMap[key];
+  if(isNowAvail){
+    DATA.availMap[key]={guardId:L.user.id,date:ds,availableAt:new Date().toISOString()};
+    await dbRef(`availability/${key}`).set(DATA.availMap[key]);
+    cellEl.classList.add('selected'); toast(`Available ${ds}`);
+  } else {
+    delete DATA.availMap[key];
+    await dbRef(`availability/${key}`).remove();
+    cellEl.classList.remove('selected'); toast('Availability removed');
+  }
+}
+function startAvailMapListener(){
+  if(!DATA.availMap) DATA.availMap={};
+  dbRef('availability').on('value',snap=>{
+    DATA.availMap=snap&&snap.exists()?snap.val():{};
+    renderGuardAvailCal(); renderMgrAvailList();
   });
+  L.unsubscribers.push(()=>dbRef('availability').off('value'));
 }
-// boot() is called by initFirebase() after Firebase loads
+
+// ============================================================
+// ASSIGN CHIPS — caution for time-off guards
+// ============================================================
+function buildAssignChips(current){
+  L.assignChipSelected=[...current];
+  const c=el('sh-assign-chips'); if(!c) return;
+  const date=getVal('sh-date');
+  c.innerHTML=guardsList().map(g=>{
+    const on=L.assignChipSelected.includes(g.id);
+    const hasTO=!!(date&&isTO(g.id,date));
+    return`<div class="chip${on?' on':''}${hasTO?' caution':''}" onclick="toggleAssignChip('${g.id}',this)" title="${hasTO?g.first+' has approved time off':''}">` +
+      `${g.first} ${g.last}${g.type==='backup'?' ⭐':''}${hasTO?' ⚠️':''}</div>`;
+  }).join('');
+}
+
+
 window.addEventListener('load', initFirebase);
 </script>
 </div>
