@@ -1045,19 +1045,12 @@ select option{background:#0e2030;}
 <script>
 'use strict';
 
-// Unregister any old service workers that might serve cached content
+// ── SERVICE WORKER CLEANUP ──────────────────────────────────
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.getRegistrations().then(regs=>{
-    regs.forEach(r=>r.unregister());
-  });
+  navigator.serviceWorker.getRegistrations().then(r=>r.forEach(sw=>sw.unregister()));
 }
 
-
-// ============================================================
-// FIREBASE CONFIG & INIT
-// ============================================================
-// Firebase loaded via compat SDK script tags above
-
+// ── FIREBASE CONFIG ─────────────────────────────────────────
 const firebaseConfig = {
   apiKey: "AIzaSyCB8Qp3ervQSIAF6VNjVbzhL0RuWkOaLm0",
   authDomain: "waveguard-2026.firebaseapp.com",
@@ -1068,1846 +1061,324 @@ const firebaseConfig = {
   appId: "1:963608978073:web:10bd717c5cb43d981ace08"
 };
 
-// Initialize Firebase
-let db;
-function initFirebase(){
-  let attempts = 0;
-  const maxAttempts = 20; // 10 seconds total (20 x 500ms)
+let db = null; // set by initFirebase
 
-  function tryInit(){
-    attempts++;
-    const statusEl = document.getElementById('loading-status');
-
-    if(typeof firebase === 'undefined'){
-      if(attempts < maxAttempts){
-        if(statusEl) statusEl.textContent = `Connecting… (${attempts})`;
-        setTimeout(tryInit, 500);
-        return;
-      }
-      // All retries failed — show friendly error with reload button
-      const ls = document.getElementById('loading-screen');
-      if(ls) ls.innerHTML = `
-        <div style="text-align:center;padding:2rem;font-family:'DM Sans',sans-serif;">
-          <div style="font-size:2rem;margin-bottom:1rem;">🌊</div>
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:3px;color:#2ec4e0;margin-bottom:.5rem;">WaveGuard</div>
-          <div style="color:#7a95a8;font-size:.85rem;margin-bottom:1.5rem;line-height:1.6;">
-            Having trouble connecting.<br>Check your internet connection and try again.
-          </div>
-          <button onclick="location.reload()" style="background:linear-gradient(135deg,#2ec4e0,#1a8ab0);color:#fff;border:none;border-radius:12px;padding:.85rem 2rem;font-size:1rem;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">
-            🔄 Tap to Retry
-          </button>
-        </div>`;
-      return;
-    }
-
-    try {
-      if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-      db = firebase.database();
-      console.log('✅ Firebase connected after', attempts, 'attempt(s)');
-      // Hide loading, show login
-      const ls = document.getElementById('loading-screen');
-      const login = document.getElementById('login-screen');
-      if(ls) ls.style.display = 'none';
-      if(login) login.style.display = 'flex';
-      boot();
-    } catch(e) {
-      console.error('Firebase init error:', e);
-      if(attempts < maxAttempts){
-        setTimeout(tryInit, 500);
-      } else {
-        const ls = document.getElementById('loading-screen');
-        // SDK failed — try REST API as last resort
-        bootWithREST();
-      }
-    }
-  }
-
-  tryInit();
+// ── FIREBASE HELPERS ─────────────────────────────────────────
+const DB_ROOT = 'waveguard2026';
+function dbRef(path){ return db.ref(`${DB_ROOT}/${path}`); }
+async function dbSet(path,val){ try{ await dbRef(path).set(val); return true; }catch(e){ console.error('dbSet',e); return false; } }
+async function dbUpdate(path,val){ try{ await dbRef(path).update(val); return true; }catch(e){ console.error('dbUpdate',e); return false; } }
+async function dbRemove(path){ try{ await dbRef(path).remove(); return true; }catch(e){ console.error('dbRemove',e); return false; } }
+async function dbGet(path){ try{ const s=await dbRef(path).get(); return s.exists()?s.val():null; }catch(e){ console.error('dbGet',e); return null; } }
+function dbListen(path,cb){
+  if(!db){ console.warn('dbListen: db not ready'); return; }
+  const r=db.ref(`${DB_ROOT}/${path}`);
+  const h=s=>cb(s.exists()?s.val():null);
+  r.on('value',h);
+  L.unsubscribers.push(()=>r.off('value',h));
 }
 
+// ── CONSTANTS ────────────────────────────────────────────────
+let SEASON = [5,6,7]; // Jun=5 Jul=6 Aug=7 — mutable
+let CUSTOM_TYPES = [];
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DAY_HDRS = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+const TYPE_LABELS = {regular:'Regular',party:'Party',swim:'Swim Meet'};
+const TYPE_REQ = {regular:2,party:3,swim:3,custom:2};
+const MAX_ROUNDS = 2;
 
-
-// ============================================================
-// MANAGER — ADD TIME OFF DIRECTLY
-// ============================================================
-function populateMgrTOGuardSelect(){
-  const sel=el('mgr-to-guard'); if(!sel) return;
-  const guards=guardsList();
-  sel.innerHTML=guards.length
-    ? guards.map(g=>`<option value="${g.id}">${g.first} ${g.last} (${g.type})</option>`).join('')
-    : '<option value="">No guards yet</option>';
-}
-
-async function mgrAddTimeOff(){
-  const guardId=getVal('mgr-to-guard');
-  const from   =getVal('mgr-to-from');
-  const to     =getVal('mgr-to-to');
-  const reason =getVal('mgr-to-reason').trim();
-  if(!guardId){ toast('Select a guard','err'); return; }
-  if(!from||!to){ toast('Select a date range','err'); return; }
-  if(to<from){ toast('End date must be after start','err'); return; }
-
-  const g=(DATA.guards||{})[guardId];
-  const id=newKey();
-  await dbSet(`timeOff/${id}`,{
-    id, guardId, from, to,
-    reason: reason||'(Added by manager)',
-    status:'approved'   // manager-added = auto approved
-  });
-
-  // Warn if guard is already scheduled during this range
-  const conflicts=shiftsList().filter(s=>
-    s.date>=from && s.date<=to && (s.assigned||[]).includes(guardId)
-  );
-  const gName2=g?`${g.first} ${g.last}`:'Guard';
-  const rangeStr=from===to?from:`${from} → ${to}`;
-
-  logEvent('time_off_approved','Manager',
-    `Manager marked time off for ${gName2}: ${rangeStr}${reason?' — '+reason:''}`,{});
-
-  setVal('mgr-to-from',''); setVal('mgr-to-to',''); setVal('mgr-to-reason','');
-
-  if(conflicts.length){
-    toast(`✓ Added — ⚠️ ${gName2} is on ${conflicts.length} shift(s) in this range`,'warn');
-  } else {
-    toast(`Time off added for ${gName2} ✓`);
-  }
-}
-
-// ============================================================
-// WEEKLY VIEW
-// ============================================================
-let _weekStart = null; // Monday of displayed week (Date object)
-
-function getMonday(d){
-  // Returns the Sunday of the week containing d
-  const dt=new Date(d);
-  const day=dt.getDay(); // 0=Sun
-  dt.setDate(dt.getDate()-day);
-  dt.setHours(0,0,0,0);
-  return dt;
-}
-
-function addDays(d,n){
-  const dt=new Date(d); dt.setDate(dt.getDate()+n); return dt;
-}
-
-function toDS(d){ return d.toISOString().slice(0,10); }
-
-function initWeekView(){
-  if(!_weekStart) _weekStart=getMonday(new Date());
-  renderWeekView();
-}
-
-function weekPrev(){
-  _weekStart=addDays(_weekStart,-7);
-  renderWeekView();
-}
-function weekNext(){
-  _weekStart=addDays(_weekStart,7);
-  renderWeekView();
-}
-
-// ============================================================
-// WEEK GLANCE HELPERS
-// ============================================================
-function getSeasonBounds(){
-  const yr=2026;
-  const minMonth=Math.min(...SEASON);
-  const maxMonth=Math.max(...SEASON);
-  return{minDate:new Date(yr,minMonth,1),maxDate:new Date(yr,maxMonth+1,0)};
-}
-function openWeekGlance(){
-  if(!_weekStart) _weekStart=getMonday(new Date());
-  // Clamp to season
-  const {minDate,maxDate}=getSeasonBounds();
-  if(_weekStart<getMonday(minDate)) _weekStart=getMonday(minDate);
-  if(_weekStart>maxDate) _weekStart=getMonday(maxDate);
-  renderWeekView(); openOv('ov-week');
-}
-function weekPrev(){
-  const prev=addDays(_weekStart,-7);
-  const {minDate}=getSeasonBounds();
-  if(prev<getMonday(minDate)) return;
-  _weekStart=prev; renderWeekView();
-}
-function weekNext(){
-  const next=addDays(_weekStart,7);
-  const {maxDate}=getSeasonBounds();
-  if(next>maxDate) return;
-  _weekStart=next; renderWeekView();
-}
-
-function renderWeekView(){
-  const grid=el('week-grid');
-  const statsG=el('week-stats-global');
-  const statsL=el('week-stats-local');
-  if(!grid||!statsG||!statsL) return;
-
-  const weekDays=[];
-  for(let i=0;i<7;i++) weekDays.push(addDays(_weekStart,i));
-
-  const {minDate,maxDate}=getSeasonBounds();
-  const labelStart=weekDays[0].toLocaleDateString('en-US',{month:'short',day:'numeric'});
-  const labelEnd  =weekDays[6].toLocaleDateString('en-US',{month:'short',day:'numeric'});
-  setText('week-label',`${labelStart} – ${labelEnd}`);
-
-  const today=toDS(new Date());
-  const allShifts=shiftsList();
-  const guards=guardsList();
-  const DAY_SHORT=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-
-  grid.innerHTML=weekDays.map((d,i)=>{
-    const ds=toDS(d);
-    const inSeason=d>=minDate&&d<=maxDate;
-    const dayShifts=inSeason?allShifts.filter(s=>s.date===ds):[];
-    const isToday=ds===today;
-    let inner=dayShifts.length
-      ?dayShifts.map(sh=>{
-          const under=(sh.assigned||[]).length<sh.required;
-          const typeKey=getShiftTypeKey?getShiftTypeKey(sh):sh.type;
-          const cls=under?'week-shift ws-under':`week-shift ws-${typeKey}`;
-          const names=(sh.assigned||[]).map(id=>{const g=(DATA.guards||{})[id];return g?g.first:'?';}).join(', ');
-          return`<div class="${cls}">${fmt12(sh.start)}-${fmt12(sh.end)}<br><span style="font-size:.55rem">${names||'—'}</span>${under?' ⚠️':''}</div>`;
-        }).join('')
-      :'<div class="week-empty">—</div>';
-    return`<div class="week-day${isToday?' today-col':''}">
-      <div class="week-day-hdr">${DAY_SHORT[i]}</div>
-      <div class="week-day-date">${d.getDate()}</div>
-      ${inner}
-    </div>`;
-  }).join('');
-
-  // THIS WEEK stats — sorted by count descending
-  const weekDSs=weekDays.map(toDS);
-  const weekShifts=allShifts.filter(s=>weekDSs.includes(s.date));
-  const localCounts={};
-  guards.forEach(g=>localCounts[g.id]=0);
-  weekShifts.forEach(sh=>(sh.assigned||[]).forEach(id=>{if(localCounts[id]!==undefined)localCounts[id]++;}));
-  const understaffed=weekShifts.filter(s=>(s.assigned||[]).length<s.required).length;
-  const regGuards=guards.filter(g=>g.type==='regular');
-  const sortedLocal=[...regGuards].sort((a,b)=>(localCounts[b.id]||0)-(localCounts[a.id]||0));
-  const localMax=Math.max(...sortedLocal.map(g=>localCounts[g.id]||0),1);
-
-  let localHTML=sortedLocal.map(g=>{
-    const cnt=localCounts[g.id]||0;
-    const pct=Math.round((cnt/localMax)*100);
-    return`<div class="stat-row">
-      <div class="stat-name">${g.first} ${g.last}</div>
-      <div class="stat-bar-wrap"><div class="stat-bar" style="width:${pct}%"></div></div>
-      <div class="stat-count">${cnt}</div>
-    </div>`;
-  }).join('');
-  if(understaffed) localHTML=`<div class="discrepancy-box disc-bad" style="margin-bottom:.5rem;">⚠️ ${understaffed} shift${understaffed>1?'s are':' is'} understaffed this week — not enough guards assigned.</div>`+localHTML;
-  if(!weekShifts.length) localHTML='<p class="empty">No shifts scheduled this week.</p>';
-  statsL.innerHTML=localHTML;
-
-  // SEASON stats — sorted by count descending, plain English
-  const seasonCounts={};
-  guards.forEach(g=>seasonCounts[g.id]=0);
-  allShifts.forEach(sh=>(sh.assigned||[]).forEach(id=>{if(seasonCounts[id]!==undefined)seasonCounts[id]++;}));
-  const sortedSeason=[...regGuards].sort((a,b)=>(seasonCounts[b.id]||0)-(seasonCounts[a.id]||0));
-  const sVals=sortedSeason.map(g=>seasonCounts[g.id]||0);
-  const sMax=Math.max(...sVals,1), sMin=Math.min(...sVals.filter(v=>v>0),0);
-  const gap=sMax-sMin;
-
-  let discHTML='',discCls='disc-ok';
-  if(sMax===0){
-    discHTML='No shifts have been assigned yet for the season.'; discCls='disc-warn';
-  } else if(gap<=2){
-    discHTML=`Shifts are evenly distributed — the biggest difference between any two guards is only ${gap} shift${gap!==1?'s':''}.`;
-  } else if(gap<=5){
-    discHTML=`${sortedSeason[0]?.first} has the most shifts (${sMax}) and ${sortedSeason[sortedSeason.length-1]?.first} has the fewest (${sMin}). That's a ${gap}-shift difference — slightly uneven but manageable.`; discCls='disc-warn';
-  } else {
-    discHTML=`${sortedSeason[0]?.first} has ${sMax} shifts while ${sortedSeason[sortedSeason.length-1]?.first} only has ${sMin} — a ${gap}-shift gap. This is a significant imbalance. Run Auto-Schedule again or reassign some shifts manually.`; discCls='disc-bad';
-  }
-
-  let globalHTML=`<div class="discrepancy-box ${discCls}">${discHTML}</div>`;
-  globalHTML+=sortedSeason.map(g=>{
-    const cnt=seasonCounts[g.id]||0;
-    const pct=sMax>0?Math.round((cnt/sMax)*100):0;
-    const isLeast=cnt===sMin&&gap>3&&cnt<(sMax/2+1);
-    return`<div class="stat-row">
-      <div class="stat-name">${g.first} ${g.last}</div>
-      <div class="stat-bar-wrap"><div class="stat-bar${isLeast?' warn-bar':''}" style="width:${pct}%"></div></div>
-      <div class="stat-count${isLeast?' stat-warn':''}">${cnt} shift${cnt!==1?'s':''}</div>
-    </div>`;
-  }).join('');
-  const bkGuards=guards.filter(g=>g.type==='backup');
-  if(bkGuards.length){
-    globalHTML+=`<div class="card-title" style="margin-top:.6rem;font-size:.55rem;">BACKUP GUARDS</div>`;
-    globalHTML+=bkGuards.map(g=>{const cnt=seasonCounts[g.id]||0;return`<div class="stat-row"><div class="stat-name">${g.first} ⭐</div><div class="stat-bar-wrap"><div class="stat-bar" style="width:${cnt>0?Math.round(cnt/sMax*100):3}%"></div></div><div class="stat-count">${cnt}</div></div>`;}).join('');
-  }
-  statsG.innerHTML=globalHTML;
-}
-function loadAvailabilityToggle(){
-  if(!L.user?.id) return;
-  const today = toDS(new Date());
-  const key = `availability/${L.user.id}_${today}`;
-  dbRef(key).get().then(snap => {
-    const tog = el('avail-today-toggle');
-    if(tog) tog.checked = snap && snap.exists();
-  }).catch(()=>{});
-}
-
-function renderMgrAvailList(){
-  const listEl = el('mgr-avail-list'); if(!listEl) return;
-  const today = toDS(new Date());
-  dbRef('availability').get().then(snap => {
-    if(!snap || !snap.exists()){
-      listEl.innerHTML = '<p class="empty">No guards marked available today.</p>';
-      return;
-    }
-    const entries = Object.values(snap.val() || {}).filter(e => e.date === today);
-    if(!entries.length){
-      listEl.innerHTML = '<p class="empty">No guards marked available today.</p>';
-      return;
-    }
-    // Sort by time marked available (earliest first = most eager)
-    entries.sort((a,b) => a.availableAt.localeCompare(b.availableAt));
-    listEl.innerHTML = entries.map((e,i) => {
-      const g = (DATA.guards||{})[e.guardId];
-      const name = g ? `${g.first} ${g.last}` : '?';
-      const time = new Date(e.availableAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
-      return `<div class="avail-guard-row">
-        <div>
-          <div class="avail-guard-name">${i===0?'⭐ ':''}${name}</div>
-          <div class="avail-guard-sub">Available since ${time}</div>
-        </div>
-        <span class="avail-pill avail-yes">Available</span>
-      </div>`;
-    }).join('');
-  }).catch(() => {
-    listEl.innerHTML = '<p class="empty">Could not load availability.</p>';
-  });
-}
-
-// Also listen live for availability changes on manager home
-function startAvailListener(){
-  const today = toDS(new Date());
-  dbRef('availability').on('value', snap => {
-    const listEl = el('mgr-avail-list'); if(!listEl) return;
-    if(!snap || !snap.exists()){
-      listEl.innerHTML = '<p class="empty">No guards marked available today.</p>';
-      return;
-    }
-    const entries = Object.values(snap.val()||{}).filter(e=>e.date===today);
-    if(!entries.length){
-      listEl.innerHTML = '<p class="empty">No guards marked available today.</p>';
-      return;
-    }
-    entries.sort((a,b)=>a.availableAt.localeCompare(b.availableAt));
-    listEl.innerHTML = entries.map((e,i)=>{
-      const g=(DATA.guards||{})[e.guardId];
-      const name=g?`${g.first} ${g.last}`:'?';
-      const time=new Date(e.availableAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
-      return`<div class="avail-guard-row">
-        <div>
-          <div class="avail-guard-name">${i===0?'⭐ ':''}${name}</div>
-          <div class="avail-guard-sub">Available since ${time}</div>
-        </div>
-        <span class="avail-pill avail-yes">Available</span>
-      </div>`;
-    }).join('');
-  });
-  L.unsubscribers.push(()=>dbRef('availability').off('value'));
-}
-
-// ============================================================
-// FEATURE 6: GUARD PROFILE (manager view)
-// ============================================================
-function openProfile(guardId){
-  const g = (DATA.guards||{})[guardId];
-  if(!g) return;
-
-  // Basic info
-  const av = el('prof-av');
-  const nm = el('prof-name');
-  const tg = el('prof-tag');
-  if(av) av.textContent = g.first[0];
-  if(nm) nm.textContent = `${g.first} ${g.last}`;
-  if(tg) tg.innerHTML = `<span class="g-tag ${g.type==='backup'?'tag-bk':'tag-reg'}">${g.type==='backup'?'Backup Guard':'Regular Guard'}</span>`;
-
-  // Stats — shifts assigned this season
-  const allShifts = shiftsList();
-  const myShifts  = allShifts.filter(s => (s.assigned||[]).includes(guardId));
-  const today     = toDS(new Date());
-  const upcoming  = myShifts.filter(s => s.date >= today).sort((a,b)=>a.date.localeCompare(b.date));
-
-  // Hours and pay from allTsLog
-  const myLogs = Object.values(DATA.allTsLog||{}).filter(e=>e.guardId===guardId);
-  const totalHrs = myLogs.reduce((s,r)=>s+r.hrs, 0);
-  const rate = parseFloat(DATA.config?.hourlyRate)||15;
-  const totalPay = totalHrs * rate;
-
-  const shiftsEl = el('prof-shifts');
-  const hrsEl    = el('prof-hrs');
-  const payEl    = el('prof-pay');
-  if(shiftsEl) shiftsEl.textContent = myShifts.length;
-  if(hrsEl)    hrsEl.textContent    = totalHrs.toFixed(1);
-  if(payEl)    payEl.textContent    = '$'+Math.round(totalPay);
-
-  // Upcoming shifts
-  const upEl = el('prof-upcoming');
-  if(upEl){
-    upEl.innerHTML = upcoming.length
-      ? upcoming.slice(0,5).map(s=>`
-          <div class="to-row" style="padding:.5rem 0;">
-            <div>
-              <div style="font-size:.85rem;font-weight:500;">${fmtShort(s.date)}</div>
-              <div style="font-size:.75rem;color:var(--muted);">${fmt12(s.start)}–${fmt12(s.end)}</div>
-            </div>
-            <span class="type-badge tb-${s.type}">${TYPE_LABELS[s.type]||s.type}</span>
-          </div>`).join('')
-      : '<p class="empty">No upcoming shifts.</p>';
-  }
-
-  // Time off
-  const toEl = el('prof-timeoff');
-  if(toEl){
-    const myTO = toList().filter(t=>t.guardId===guardId)
-      .sort((a,b)=>a.from.localeCompare(b.from));
-    toEl.innerHTML = myTO.length
-      ? myTO.map(t=>`
-          <div class="to-row" style="padding:.5rem 0;">
-            <div>
-              <div style="font-size:.83rem;">${t.from===t.to?t.from:t.from+' → '+t.to}</div>
-              ${t.reason?`<div style="font-size:.73rem;color:var(--sand);font-style:italic;">${t.reason}</div>`:''}
-            </div>
-            <span class="status-pill sp-${t.status}">${t.status}</span>
-          </div>`).join('')
-      : '<p class="empty">No time off requests.</p>';
-  }
-
-  // Active swaps
-  const swEl = el('prof-swaps');
-  if(swEl){
-    const mySwaps = swapsList().filter(s=>
-      (s.from===guardId||s.to===guardId) &&
-      ['pending','broadcast','countered'].includes(s.status)
-    );
-    swEl.innerHTML = mySwaps.length
-      ? mySwaps.map(s=>{
-          const other = s.from===guardId
-            ? (DATA.guards||{})[s.to]
-            : (DATA.guards||{})[s.from];
-          const otherName = other?`${other.first} ${other.last}`:'All guards';
-          const badge = s.type==='give'
-            ? '<span class="badge b-yellow">Give Away</span>'
-            : '<span class="badge b-blue">Swap</span>';
-          return `<div style="padding:.4rem 0;font-size:.82rem;">${badge} with ${otherName} — <span style="color:var(--muted)">${s.status}</span></div>`;
-        }).join('')
-      : '<p class="empty">No active requests.</p>';
-  }
-
-  // Show overlay
-  const overlay = el('ov-profile');
-  if(overlay){
-    overlay.style.display='flex';
-    setTimeout(()=>overlay.classList.add('open'),10);
-  }
-}
-
-function closeProfile(){
-  const overlay = el('ov-profile');
-  if(overlay){
-    overlay.classList.remove('open');
-    setTimeout(()=>overlay.style.display='none',300);
-  }
-}
-
-
-// ============================================================
-// STAFF MANAGEMENT
-// ============================================================
-function guardRowHTML(g){
-  const pCode=g.personalCode?`🔑 ${g.personalCode}`:'🔑 shared';
-  const lSeen=g.lastSeen
-    ? `Last login: ${new Date(g.lastSeen).toLocaleDateString('en-US',{month:'short',day:'numeric'})} ${new Date(g.lastSeen).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`
-    : 'Never logged in';
-  return`<div class="guard-row" style="align-items:flex-start;padding:.8rem 0;">
-    <div style="cursor:pointer;flex:1;display:flex;align-items:flex-start;gap:.68rem;" onclick="openProfile('${g.id}')">
-      <div class="g-av${g.type==='backup'?' backup-av':''}">${g.first[0]}</div>
-      <div>
-        <div class="g-name">${g.first} ${g.last}</div>
-        <div class="g-meta">${pCode}</div>
-        <div class="g-meta">${lSeen}</div>
-        <span class="g-tag ${g.type==='backup'?'tag-bk':'tag-reg'}">${g.type==='backup'?'Backup':'Regular'}</span>
-      </div>
-    </div>
-    <div style="display:flex;flex-direction:column;gap:.3rem;margin-left:.5rem;flex-shrink:0;">
-      <button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();openEditCode('${g.id}')" style="font-size:.7rem;padding:.3rem .6rem;">🔑</button>
-      <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();removeGuard('${g.id}')">✕</button>
-    </div>
-  </div>`;}
-
-function renderStaff(){
-  const rl=el('m-staff-reg-list'), bl=el('m-staff-bk-list');
-  if(!rl||!bl) return;
-  const reg=guardsList().filter(g=>g.type==='regular');
-  const bk =guardsList().filter(g=>g.type==='backup');
-  rl.innerHTML=reg.length?reg.map(guardRowHTML).join(''):'<p class="empty">No guards yet.</p>';
-  bl.innerHTML=bk.length?bk.map(guardRowHTML).join(''):'<p class="empty">None.</p>';
-}
-
-function staffTab(type,btn){
-  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active')); btn.classList.add('active');
-  const rp=el('m-staff-regular'), bp=el('m-staff-backup');
-  if(rp) rp.style.display=type==='regular'?'block':'none';
-  if(bp) bp.style.display=type==='backup'?'block':'none';
-}
-
-function openAddGuard(type){
-  setText('ag-title',type==='backup'?'ADD BACKUP GUARD':'ADD LIFEGUARD');
-  setVal('ag-type',type);
-  ['ag-first','ag-last','ag-phone','ag-email','ag-code'].forEach(id=>setVal(id,''));
-  openOv('ov-addguard');
-}
-
-async function saveGuard(){
-  const first=getVal('ag-first').trim(), last=getVal('ag-last').trim();
-  const phone=getVal('ag-phone').trim(), email=getVal('ag-email').trim();
-  const type=getVal('ag-type');
-  const personalCode=getVal('ag-code').trim();
-  if(!first||!last){ toast('Name required','err'); return; }
-  if(personalCode && !/^\d{4}$/.test(personalCode)){ toast('Personal code must be exactly 4 digits','err'); return; }
-  const id=newKey();
-  await dbSet(`guards/${id}`,{id,first,last,phone,email,type,personalCode,notifPrefs:{groupme:true,reminders:true,alerts:true}});
-  logEvent('guard_added','Manager',`${type==='backup'?'Backup guard':'Lifeguard'} added: ${first} ${last}`,{});
-  closeOv('ov-addguard'); toast(`${first} added!`);
-}
-
-async function removeGuard(id){
-  const g=(DATA.guards||{})[id];
-  confirmAction('REMOVE GUARD','Remove this guard from all shifts and the team?','Remove Guard', async ()=>{
-    await dbRemove(`guards/${id}`);
-    for(const [sid,sh] of Object.entries(DATA.shifts||{})){
-      if((sh.assigned||[]).includes(id)){
-        await dbUpdate(`shifts/${sid}`,{assigned:(sh.assigned||[]).filter(a=>a!==id)});
-      }
-    }
-    logEvent('guard_removed','Manager',`Guard removed: ${g?g.first+' '+g.last:'?'}`,{});
-    toast('Guard removed');
-  });
-}
-
-// ============================================================
-// GROUPME INTEGRATION
-// ============================================================
-async function postGroupMe(text){
-  const botId = DATA.config?.groupmeBotId;
-  if(!botId){ console.log('GroupMe: no bot ID configured'); return; }
-  try {
-    await fetch('https://api.groupme.com/v3/bots/post', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({bot_id: botId, text})
-    });
-    console.log('GroupMe message sent');
-  } catch(e){
-    console.warn('GroupMe post failed:', e.message);
-  }
-}
-
-
-// ============================================================
-// BOOT — called after Firebase is ready
-// ============================================================
-function boot(){
-  // Firebase is already connected. Check if setup has been done.
-  try {
-    const stored = localStorage.getItem('wg_config');
-    if(stored){
-      const config = JSON.parse(stored);
-      if(config && config.setupDone) return; // login screen already visible
-    }
-  } catch(e){}
-  // Check Firebase
-  dbRef('config').get().then(snap=>{
-    if(!snap || !snap.exists() || !snap.val().setupDone){
-      showSetupPage();
-    }
-  }).catch(()=>{ showSetupPage(); });
-}
-
-
-// ============================================================
-// FIREBASE REST API FALLBACK (no SDK needed)
-// Used if SDK fails to load from CDN
-// ============================================================
-const FB_REST_URL = 'https://waveguard-2026-default-rtdb.firebaseio.com';
-
-async function restGet(path){
-  const res = await fetch(`${FB_REST_URL}/waveguard2026/${path}.json`);
-  if(!res.ok) throw new Error(`REST GET failed: ${res.status}`);
-  return res.json();
-}
-
-async function restSet(path, data){
-  const res = await fetch(`${FB_REST_URL}/waveguard2026/${path}.json`, {
-    method: 'PUT',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify(data)
-  });
-  if(!res.ok) throw new Error(`REST PUT failed: ${res.status}`);
-  return res.json();
-}
-
-// REST-based boot (no SDK)
-async function bootWithREST(){
-  console.log('📡 Using REST API fallback (no SDK)');
-  try {
-    const config = await restGet('config');
-    if(!config || !config.setupDone){
-      showSetupPage();
-    }
-    // Show login
-    const ls=document.getElementById('loading-screen');
-    const login=document.getElementById('login-screen');
-    if(ls) ls.style.display='none';
-    if(login) login.style.display='flex';
-    // Mark that we're in REST mode
-    window._restMode = true;
-    toast('Connected in offline mode — some live features may be limited','warn');
-  } catch(e){
-    console.error('REST fallback also failed:', e);
-    const ls=document.getElementById('loading-screen');
-    if(ls) ls.innerHTML=`
-      <div style="text-align:center;padding:2rem;font-family:'DM Sans',sans-serif;">
-        <div style="font-size:2rem;margin-bottom:1rem;">🌊</div>
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:3px;color:#2ec4e0;margin-bottom:.5rem;">WaveGuard</div>
-        <div style="color:#7a95a8;font-size:.85rem;margin-bottom:1.5rem;line-height:1.6;">
-          No internet connection detected.<br>Connect to WiFi or mobile data and try again.
-        </div>
-        <button onclick="location.reload()" style="background:linear-gradient(135deg,#2ec4e0,#1a8ab0);color:#fff;border:none;border-radius:12px;padding:.85rem 2rem;font-size:1rem;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">
-          🔄 Tap to Retry
-        </button>
-      </div>`;
-  }
-}
-
-// ============================================================
-// CONSTANTS
-// ============================================================
-let SEASON = [5,6,7]; // mutable — manager can add months
-let CUSTOM_TYPES = []; // loaded from Firebase
-const MONTHS       = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-const DAY_HDRS     = ['Su','Mo','Tu','We','Th','Fr','Sa'];
-const TYPE_LABELS  = {regular:'Regular',party:'Party',swim:'Swim Meet'};
-const TYPE_REQ     = {regular:2,party:3,swim:3,custom:2};
-const MAX_ROUNDS   = 3;
-const DB_ROOT      = 'waveguard2026';
-
-// ============================================================
-// LOCAL STATE (UI only — source of truth is Firebase)
-// ============================================================
+// ── LOCAL STATE (UI only) ────────────────────────────────────
 const L = {
-  user: null,           // logged-in user object
+  user: null,
   selectedDay: null,
   copiedDay: null,
   swapMode: 'swap',
-  counterSwapId: null,
   autoSelectedGuards: [],
   assignChipSelected: [],
   clockedIn: false,
   clockInTime: null,
-  unsubscribers: [],    // Firebase listeners to detach on logout
+  unsubscribers: [],
 };
 
-// Live data mirrors from Firebase
+// ── FIREBASE LIVE DATA ───────────────────────────────────────
 let DATA = {
-  config:   { managerCode: null, guardCode: null },
-  guards:   {},   // { id: {first,last,phone,email,type,notifPrefs} }
-  shifts:   {},   // { id: {date,start,end,...} }
-  swaps:    {},   // { id: {type,from,to,...} }
-  timeOff:  {},   // { id: {guardId,from,to,reason,status} }
-  eventLog: {},   // { id: {ts,type,actor,msg} }
-  allTsLog: {},   // { id: {guardId,date,in,out,hrs} }
-  notifications:{},
+  config:{}, guards:{}, shifts:{}, swaps:{},
+  timeOff:{}, eventLog:{}, allTsLog:{},
+  notifications:{}, availMap:{},
 };
 
-// ============================================================
-// FIREBASE HELPERS
-// ============================================================
-function dbRef(path){ return db.ref(`${DB_ROOT}/${path}`); }
-
-async function dbSet(path, val){
-  try { await dbRef(path).set(val); return true; }
-  catch(e){ console.error('dbSet error',path,e); toast('Sync error: '+e.message,'err'); return false; }
-}
-
-async function dbUpdate(path, val){
-  try { await dbRef(path).update(val); return true; }
-  catch(e){ console.error('dbUpdate error',path,e); toast('Sync error: '+e.message,'err'); return false; }
-}
-
-async function dbRemove(path){
-  try { await dbRef(path).remove(); return true; }
-  catch(e){ console.error('dbRemove error',path,e); return false; }
-}
-
-async function dbGet(path){
-  try {
-    const snap = await dbRef(path).get();
-    return snap.exists() ? snap.val() : null;
-  } catch(e){ console.error('dbGet error',path,e); return null; }
-}
-
-function dbListen(path, cb){
-  const r = db.ref(`${DB_ROOT}/${path}`);
-  const handler = snap => cb(snap.exists() ? snap.val() : null);
-  r.on('value', handler);
-  L.unsubscribers.push(() => r.off('value', handler));
-}
-
-function dbPushKey(path){
-  return db.ref(`${DB_ROOT}/${path}`).push().key;
-}
-
-// ============================================================
-// SETUP LISTENERS — sync all Firebase data into DATA live
-// ============================================================
+// ── LISTENERS ────────────────────────────────────────────────
 function startListeners(){
-  // Each listener updates DATA and re-renders relevant UI
-  dbListen('config',   v => { if(v) DATA.config=v; });
-  dbListen('guards',   v => { DATA.guards=v||{}; try{localStorage.setItem('wg_guards',JSON.stringify(v||{}));}catch(e){} renderStaff(); renderAutoChips(); buildAssignChips(L.assignChipSelected); });
-  dbListen('shifts',   v => { DATA.shifts=v||{}; refreshCals(); renderNextShift(); });
-  dbListen('swaps',    v => { DATA.swaps=v||{}; renderSwaps(); });
-  dbListen('timeOff',  v => { DATA.timeOff=v||{}; renderGuardTimeOff(); renderMgrTimeOff(); });
-  dbListen('eventLog', v => { DATA.eventLog=v||{}; renderEventLog(); updateNotifBadge(); });
-  dbListen('allTsLog', v => { DATA.allTsLog=v||{}; });
-  dbListen('notifications', v => { DATA.notifications=v||{}; updateNotifBadge(); });
+  dbListen('config',   v=>{ DATA.config=v||{}; });
+  dbListen('guards',   v=>{ DATA.guards=v||{}; try{localStorage.setItem('wg_guards',JSON.stringify(v||{}));}catch(e){} renderStaff(); renderAutoChips(); buildAssignChips(L.assignChipSelected); });
+  dbListen('shifts',   v=>{ DATA.shifts=v||{}; refreshCals(); renderNextShift(); });
+  dbListen('swaps',    v=>{ DATA.swaps=v||{}; renderSwaps(); });
+  dbListen('timeOff',  v=>{ DATA.timeOff=v||{}; renderGuardTimeOff(); renderMgrTimeOff(); });
+  dbListen('eventLog', v=>{ DATA.eventLog=v||{}; renderEventLog(); updateNotifBadge(); });
+  dbListen('allTsLog', v=>{ DATA.allTsLog=v||{}; renderTimesheet(); });
+  dbListen('availability', v=>{ DATA.availMap=v||{}; renderGuardAvailCal(); renderMgrAvailList(); });
 }
+function stopListeners(){ L.unsubscribers.forEach(u=>u()); L.unsubscribers=[]; }
 
-function stopListeners(){
-  L.unsubscribers.forEach(u => u());
-  L.unsubscribers = [];
-}
-
-// ============================================================
-// SAFE DOM HELPERS
-// ============================================================
+// ── DOM HELPERS ──────────────────────────────────────────────
 function el(id){ return document.getElementById(id); }
-function set_el(id,prop,val){ const e=el(id); if(e) e[prop]=val; }
-function setText(id,v){ set_el(id,'textContent',v); }
-function setHTML(id,v){ set_el(id,'innerHTML',v); }
 function show(id,d='block'){ const e=el(id); if(e) e.style.display=d; }
 function hide(id){ const e=el(id); if(e) e.style.display='none'; }
-function addClass(id,c){ const e=el(id); if(e) e.classList.add(c); }
-function removeClass(id,c){ const e=el(id); if(e) e.classList.remove(c); }
+function setText(id,v){ const e=el(id); if(e) e.textContent=v; }
+function setHTML(id,v){ const e=el(id); if(e) e.innerHTML=v; }
 function getVal(id){ const e=el(id); return e?e.value:''; }
-function setVal(id,v){ set_el(id,'value',v); }
+function setVal(id,v){ const e=el(id); if(e) e.value=v; }
 function getCheck(id){ const e=el(id); return e?e.checked:false; }
 function setCheck(id,v){ const e=el(id); if(e) e.checked=v; }
+function addClass(id,c){ const e=el(id); if(e) e.classList.add(c); }
+function removeClass(id,c){ const e=el(id); if(e) e.classList.remove(c); }
 
-// ============================================================
-// UTILITIES
-// ============================================================
-function fmt12(t){
-  if(!t) return '';
-  const[h,m]=t.split(':').map(Number);
-  return`${h%12||12}:${String(m).padStart(2,'0')} ${h>=12?'PM':'AM'}`;
-}
-function fmtShort(ds){ return new Date(ds+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}); }
-function fmtLong(ds){  return new Date(ds+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}); }
+// ── UTILITIES ────────────────────────────────────────────────
 function guardsList(){ return Object.values(DATA.guards||{}); }
 function shiftsList(){ return Object.values(DATA.shifts||{}); }
 function swapsList(){  return Object.values(DATA.swaps||{}); }
 function toList(){     return Object.values(DATA.timeOff||{}); }
-function me(){ return L.user?.role==='guard' ? (DATA.guards||{})[L.user.id] : null; }
-function meObj(){ return {...(DATA.guards||{})[L.user?.id], id:L.user?.id}; }
+function me(){ return L.user?.role==='guard'?(DATA.guards||{})[L.user.id]:null; }
 function gName(id){ const g=(DATA.guards||{})[id]; return g?`${g.first} ${g.last}`:'?'; }
 function isTO(gid,date){ return toList().some(t=>t.guardId===gid&&t.status==='approved'&&date>=t.from&&date<=t.to); }
-function newKey(){ return Date.now()+'_'+Math.random().toString(36).slice(2,7); }
+function newKey(){ return `${Date.now()}_${Math.random().toString(36).slice(2,7)}`; }
+function toDS(d){ return d.toISOString().slice(0,10); }
+function fmt12(t){ if(!t) return ''; const[h,m]=t.split(':').map(Number); return`${h%12||12}:${String(m).padStart(2,'0')} ${h>=12?'PM':'AM'}`; }
+function fmtShort(ds){ return new Date(ds+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}); }
+function fmtLong(ds){ return new Date(ds+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}); }
+function addDays(d,n){ const dt=new Date(d); dt.setDate(dt.getDate()+n); return dt; }
+function getMonday(d){ const dt=new Date(d); dt.setDate(dt.getDate()-dt.getDay()); dt.setHours(0,0,0,0); return dt; }
+function timeToMins(t){ if(!t) return 0; const[h,m]=t.split(':').map(Number); return h*60+m; }
+function timeToHours(s,e){ return (timeToMins(e)-timeToMins(s))/60; }
 
-let _tt=null;
+let _toast=null;
 function toast(msg,type='ok'){
   const e=el('toast'); if(!e) return;
-  e.textContent=msg;
-  e.className='toast'+(type==='err'?' err':type==='warn'?' warn':'');
-  e.classList.add('show');
-  if(_tt) clearTimeout(_tt);
-  _tt=setTimeout(()=>e.classList.remove('show'),3000);
+  e.textContent=msg; e.className='toast'+(type==='err'?' err':type==='warn'?' warn':'');
+  e.classList.add('show'); if(_toast) clearTimeout(_toast);
+  _toast=setTimeout(()=>e.classList.remove('show'),3200);
 }
 function openOv(id){ const e=el(id); if(e) e.classList.add('open'); }
 function closeOv(id){ const e=el(id); if(e) e.classList.remove('open'); }
-
-// Profile overlay close on backdrop
-document.addEventListener('DOMContentLoaded',()=>{
-  const profOv=el('ov-profile');
-  if(profOv) profOv.addEventListener('click',e=>{if(e.target===profOv)closeProfile();});
-});
 
 document.querySelectorAll('.overlay').forEach(o=>{
   o.addEventListener('click',e=>{ if(e.target===o) o.classList.remove('open'); });
 });
 document.addEventListener('click',e=>{
-  if(!e.target.closest('.hdr-user')) ['g-dd','m-dd'].forEach(id=>addClass(id,'hidden'));
+  if(!e.target.closest('.hdr-user')) ['g-dd','m-dd'].forEach(id=>{ const d=el(id); if(d) d.classList.add('hidden'); });
 });
 
-// ============================================================
-// CONFIRM DIALOG
-// ============================================================
+// ── CONFIRM DIALOG ────────────────────────────────────────────
 let _confirmCb=null;
 function confirmAction(title,msg,yesLabel,cb){
-  setText('confirm-title',title);
-  setText('confirm-msg',msg);
+  setText('confirm-title',title); setText('confirm-msg',msg);
   const btn=el('confirm-yes-btn'); if(btn) btn.textContent=yesLabel||'Confirm';
   _confirmCb=cb; openOv('ov-confirm');
 }
 function confirmYes(){ closeOv('ov-confirm'); if(_confirmCb) _confirmCb(); _confirmCb=null; }
 function confirmNo(){  closeOv('ov-confirm'); _confirmCb=null; }
 
-// ============================================================
-// SETUP PAGE (first-time manager onboarding)
-// ============================================================
+// ── GROUPME ───────────────────────────────────────────────────
+async function postGroupMe(text){
+  const botId=DATA.config?.groupmeBotId; if(!botId) return;
+  try{ await fetch('https://api.groupme.com/v3/bots/post',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({bot_id:botId,text})}); }
+  catch(e){ console.warn('GroupMe failed',e); }
+}
+
+// ── EVENT LOG ─────────────────────────────────────────────────
+async function logEvent(type,actor,msg,meta={}){
+  if(!db) return;
+  const id=newKey();
+  await dbSet(`eventLog/${id}`,{id,ts:new Date().toISOString(),type,actor,msg,meta});
+}
+const LOG_ICONS={swap_request:'🔄',swap_accepted:'✅',swap_declined:'❌',give_request:'📢',give_accepted:'✅',counter_offer:'↩️',sick_alert:'🤒',clock_in:'⏱',clock_out:'⏹',time_off_request:'🗓',time_off_approved:'✅',time_off_denied:'❌',shift_added:'➕',shift_edited:'✏️',shift_deleted:'🗑',guard_added:'👤',guard_removed:'👤',closure_alert:'⚠️',auto_schedule:'⚡',available_to_cover:'🙋',manual_adjustment:'⏱'};
+const LOG_COLORS={swap_accepted:'log-green',give_accepted:'log-green',time_off_approved:'log-green',swap_declined:'log-red',time_off_denied:'log-red',shift_deleted:'log-red',guard_removed:'log-red',sick_alert:'log-coral',closure_alert:'log-yellow',clock_in:'log-blue',clock_out:'log-blue'};
+function tsLabel(iso){ const d=new Date(iso); return d.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); }
+
+function renderEventLog(){
+  const logEl=el('m-event-log'); if(!logEl) return;
+  const filter=getVal('log-filter')||'all';
+  const search=(getVal('log-search')||'').toLowerCase();
+  let entries=Object.values(DATA.eventLog||{}).sort((a,b)=>b.ts.localeCompare(a.ts));
+  if(filter!=='all') entries=entries.filter(e=>e.type.startsWith(filter)||e.type===filter);
+  if(search) entries=entries.filter(e=>(e.msg||'').toLowerCase().includes(search)||(e.actor||'').toLowerCase().includes(search));
+  if(!entries.length){ logEl.innerHTML='<p class="empty">No events yet.</p>'; return; }
+  logEl.innerHTML=entries.map(e=>`<div class="log-entry ${LOG_COLORS[e.type]||''}">
+    <div class="log-icon">${LOG_ICONS[e.type]||'📋'}</div>
+    <div class="log-body"><div class="log-msg">${e.msg||''}</div><div class="log-meta">${e.actor||''} · ${tsLabel(e.ts)}</div></div>
+  </div>`).join('');
+}
+function setLogFilter(val,btn){
+  setVal('log-filter',val);
+  document.querySelectorAll('.log-filters .tab').forEach(t=>t.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  renderEventLog();
+}
+function updateNotifBadge(){
+  const unread=Object.values(DATA.notifications||{}).filter(n=>!n.read).length;
+  const badge=el('m-notif-badge');
+  if(badge){ badge.textContent=unread>0?String(unread):''; badge.style.display=unread>0?'flex':'none'; }
+}
+async function markNotifsRead(){
+  const updates={};
+  Object.keys(DATA.notifications||{}).forEach(k=>{ updates[`notifications/${k}/read`]=true; });
+  if(Object.keys(updates).length && db) await db.ref(DB_ROOT).update(updates).catch(()=>{});
+}
+function exportEventLog(){
+  const entries=Object.values(DATA.eventLog||{}).sort((a,b)=>a.ts.localeCompare(b.ts));
+  if(!entries.length){ toast('No events to export','err'); return; }
+  downloadCSV('waveguard_event_log.csv',[['Timestamp','Actor','Type','Description'],...entries.map(e=>[new Date(e.ts).toLocaleString(),e.actor,e.type.replace(/_/g,' '),'"'+(e.msg||'')+'"'])]);
+  toast('Event log exported!');
+}
+
+// ── SETUP SCREEN ──────────────────────────────────────────────
 function showSetupPage(){
-  hide('login-screen'); hide('guard-app'); hide('mgr-app');
+  hide('loading-screen'); hide('login-screen'); hide('guard-app'); hide('mgr-app');
   show('setup-screen','flex');
 }
+function showSetupError(msg){ const e=el('setup-error'); if(e){e.textContent=msg;e.style.display='block';} else toast(msg,'err'); }
+function hideSetupError(){ const e=el('setup-error'); if(e) e.style.display='none'; }
 
 async function doSetup(){
-  const first  = getVal('setup-first').trim();
-  const last   = getVal('setup-last').trim();
-  const mgrCode= getVal('setup-mgr-code').trim();
-  const gCode  = getVal('setup-guard-code').trim();
-
-  // Validate
-  if(!first||!last){
-    showSetupError('Please enter your first and last name.'); return;
-  }
-  if(mgrCode.length<4){
-    showSetupError('Manager code must be at least 4 characters.'); return;
-  }
-  if(gCode.length<4){
-    showSetupError('Guard code must be at least 4 characters.'); return;
-  }
-  if(mgrCode===gCode){
-    showSetupError('Manager and guard codes must be different.'); return;
-  }
-
-  const setupBtn=el('setup-btn');
-  if(setupBtn){ setupBtn.disabled=true; setupBtn.textContent='Saving…'; }
-
-  const configData = { managerCode:mgrCode, guardCode:gCode,
-    managerFirst:first, managerLast:last, setupDone:true, hourlyRate:15 };
-
-  // Save to localStorage immediately (instant, no network needed)
-  try { localStorage.setItem('wg_config', JSON.stringify(configData)); } catch(e){}
-
-  // Save to Firebase (async, may take a moment)
-  try {
-    await dbRef('config').set(configData);
-  } catch(e){
-    console.warn('Firebase write failed, using localStorage only:', e);
-  }
-
-  DATA.config = configData;
-  if(setupBtn){ setupBtn.disabled=false; setupBtn.textContent='Create Team →'; }
+  const first=getVal('setup-first').trim(), last=getVal('setup-last').trim();
+  const mgrCode=getVal('setup-mgr-code').trim(), gCode=getVal('setup-guard-code').trim();
+  if(!first||!last){ showSetupError('Enter your name.'); return; }
+  if(mgrCode.length<4){ showSetupError('Manager code must be at least 4 characters.'); return; }
+  if(gCode.length<4){ showSetupError('Guard code must be at least 4 characters.'); return; }
+  if(mgrCode===gCode){ showSetupError('Manager and guard codes must be different.'); return; }
+  const btn=el('setup-btn'); if(btn){btn.disabled=true;btn.textContent='Saving…';}
+  const cfg={managerCode:mgrCode,guardCode:gCode,managerFirst:first,managerLast:last,setupDone:true,hourlyRate:15};
+  try{ localStorage.setItem('wg_config',JSON.stringify(cfg)); }catch(e){}
+  await dbSet('config',cfg);
+  DATA.config=cfg;
+  if(btn){btn.disabled=false;btn.textContent='Create Team →';}
   hideSetupError();
-  toast('Team created! You can now log in.');
-  setTimeout(()=>{ hide('setup-screen'); show('login-screen','flex'); }, 1000);
+  toast('Team created! Log in to get started.');
+  setTimeout(()=>{ hide('setup-screen'); show('login-screen','flex'); },1000);
 }
 
-function showSetupError(msg){
-  const e=el('setup-error');
-  if(e){ e.textContent=msg; e.style.display='block'; }
-  else toast(msg,'err');
-}
-function hideSetupError(){
-  const e=el('setup-error'); if(e) e.style.display='none';
-}
-
-// ============================================================
-// LOGIN / LOGOUT
-// ============================================================
-function toggleCodeVis(btn){
-  const inp=el('li-code'); if(!inp) return;
-  inp.type=inp.type==='password'?'text':'password';
-  btn.textContent=inp.type==='password'?'👁':'🙈';
-}
+// ── LOGIN / LOGOUT ────────────────────────────────────────────
+function showLoginError(msg){ const e=el('login-error'); if(e){e.textContent=msg;e.style.display='block';} else toast(msg,'err'); }
+function hideLoginError(){ const e=el('login-error'); if(e) e.style.display='none'; }
+function toggleCodeVis(btn){ const inp=el('li-code'); if(!inp) return; inp.type=inp.type==='password'?'text':'password'; btn.textContent=inp.type==='password'?'👁':'🙈'; }
 
 async function doLogin(){
-  // Ensure loading screen is hidden
-  const ls=document.getElementById('loading-screen');
-  if(ls) ls.style.display='none';
-  const first=getVal('li-first').trim();
-  const last =getVal('li-last').trim();
-  const code =getVal('li-code').trim();
+  const first=getVal('li-first').trim(), last=getVal('li-last').trim(), code=getVal('li-code').trim();
   if(!first||!last){ showLoginError('Enter your first and last name.'); return; }
-  if(!code){         showLoginError('Enter the access code.'); return; }
-
+  if(!code){ showLoginError('Enter the access code.'); return; }
   const loginBtn=el('login-btn');
-  if(loginBtn){ loginBtn.disabled=true; loginBtn.textContent='Checking…'; }
-
+  if(loginBtn){loginBtn.disabled=true;loginBtn.textContent='Checking…';}
   hideLoginError();
 
-  // Load config — try Firebase first, fall back to localStorage
-  let config = null;
-  try {
-    const snap = await Promise.race([
-      dbRef('config').get(),
-      new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),5000))
-    ]);
-    if(snap && snap.exists()) config = snap.val();
-  } catch(e){
-    console.warn('Firebase read failed, trying localStorage:', e);
+  // Load config — Firebase first, localStorage fallback
+  let config=null;
+  if(db){
+    try{
+      const snap=await Promise.race([dbRef('config').get(),new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),6000))]);
+      if(snap&&snap.exists()) config=snap.val();
+    }catch(e){ console.warn('Firebase config read failed:',e); }
   }
+  if(!config){ try{ const s=localStorage.getItem('wg_config'); if(s) config=JSON.parse(s); }catch(e){} }
 
-  // localStorage fallback
-  if(!config){
-    try {
-      const stored = localStorage.getItem('wg_config');
-      if(stored) config = JSON.parse(stored);
-    } catch(e){}
-  }
+  if(loginBtn){loginBtn.disabled=false;loginBtn.textContent='Dive In →';}
 
-  if(loginBtn){ loginBtn.disabled=false; loginBtn.textContent='Dive In →'; }
+  if(!config||!config.setupDone){ showSetupPage(); return; }
+  DATA.config=config;
+  try{ localStorage.setItem('wg_config',JSON.stringify(config)); }catch(e){}
 
-  if(!config || !config.setupDone){
-    showSetupPage(); return;
-  }
-
-  DATA.config = config;
-  // Keep localStorage in sync
-  try { localStorage.setItem('wg_config', JSON.stringify(config)); } catch(e){}
-
+  // Manager check
   if(code===config.managerCode){
-    // Verify name matches what was entered during setup
-    const mFirst=(config.managerFirst||'').toLowerCase();
-    const mLast =(config.managerLast||'').toLowerCase();
-    if(mFirst && mLast && (first.toLowerCase()!==mFirst || last.toLowerCase()!==mLast)){
-      showLoginError(`Wrong name for manager account. Try again.`);
-      return;
+    const mf=(config.managerFirst||'').toLowerCase(), ml=(config.managerLast||'').toLowerCase();
+    if(mf&&ml&&(first.toLowerCase()!==mf||last.toLowerCase()!==ml)){
+      showLoginError('Wrong name for manager account.'); return;
     }
-    L.user = { id:'manager', first, last, role:'manager' };
+    L.user={id:'manager',first,last,role:'manager'};
     startListeners();
-    mountManager(first, last);
-
-  } else {
-    // Could be a guard using shared code OR personal code
-    let guards = {};
-    try {
-      const gsnap = await dbRef('guards').get();
-      if(gsnap && gsnap.exists()) guards = gsnap.val();
-    } catch(e){ console.warn('Guards fetch failed:', e); }
-    if(!Object.keys(guards).length){
-      try { const cached=localStorage.getItem('wg_guards'); if(cached) guards=JSON.parse(cached); } catch(e){}
-    }
-
-    // Find guard by name
-    const match = Object.entries(guards).find(([id,g])=>
-      g.first.toLowerCase()===first.toLowerCase() &&
-      g.last.toLowerCase()===last.toLowerCase()
-    );
-    if(!match){
-      showLoginError('Name not found or wrong access code. Check with your manager.');
-      if(loginBtn){ loginBtn.disabled=false; loginBtn.textContent='Dive In →'; }
-      return;
-    }
-    const [gid, gdata] = match;
-
-    // Personal code takes priority; fall back to shared team code
-    const personalCode = gdata.personalCode||'';
-    const validCode = personalCode ? code===personalCode : code===config.guardCode;
-    if(!validCode){
-      showLoginError('Wrong access code. Check with your manager.');
-      if(loginBtn){ loginBtn.disabled=false; loginBtn.textContent='Dive In →'; }
-      return;
-    }
-
-    L.user = { id: gid, first: gdata.first, last: gdata.last, role:'guard' };
-    DATA.guards = guards;
-    startListeners();
-    mountGuard(gdata.first, gdata.last);
+    mountManager(first,last);
+    return;
   }
-}
 
-function showLoginError(msg){
-  const e=el('login-error');
-  if(e){ e.textContent=msg; e.style.display='block'; }
-  else toast(msg,'err');
-}
-function hideLoginError(){
-  const e=el('login-error'); if(e) e.style.display='none';
-}
+  // Guard check — load guards
+  let guards={};
+  if(db){
+    try{ const gs=await dbRef('guards').get(); if(gs&&gs.exists()) guards=gs.val(); }
+    catch(e){ console.warn('Guards fetch failed:',e); }
+  }
+  if(!Object.keys(guards).length){ try{ const c=localStorage.getItem('wg_guards'); if(c) guards=JSON.parse(c); }catch(e){} }
 
-function mountGuard(first, last){
-  // Will load avail toggle after mount
-  setTimeout(loadAvailabilityToggle, 500);
-  hide('login-screen'); hide('mgr-app');
-  show('guard-app','flex');
-  setText('g-hdr-name', first);
-  setText('g-greeting',`HEY, ${first.toUpperCase()}!`);
-  setText('g-date', new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}));
-  setText('g-dd-name',`${first} ${last}`);
-  const av=el('g-avatar'); if(av) av.textContent=first[0].toUpperCase();
-  // Seed a swap demo if this guard has shifts
-  renderNextShift();
-  renderTimesheet();
-  renderSwaps();
-  renderGuardTimeOff();
-  renderGuardCal();
-}
+  const match=Object.entries(guards).find(([id,g])=>
+    g.first.toLowerCase()===first.toLowerCase()&&g.last.toLowerCase()===last.toLowerCase()
+  );
+  if(!match){ showLoginError('Name not found. Ask your manager to add you.'); return; }
+  const [gid,gdata]=match;
+  const personalCode=gdata.personalCode||'';
+  const validCode=personalCode?code===personalCode:code===config.guardCode;
+  if(!validCode){ showLoginError('Wrong access code. Check with your manager.'); return; }
 
-function mountManager(first, last){
-  setTimeout(()=>{ renderMgrAvailList(); startAvailListener(); }, 500);
-  hide('login-screen'); hide('guard-app');
-  show('mgr-app','flex');
-  setText('m-hdr-name', first);
-  setText('m-greeting',`HEY, ${first.toUpperCase()}!`);
-  setText('m-date', new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}));
-  setText('m-dd-name',`${first} ${last}`);
-  const av=el('m-avatar'); if(av) av.textContent=first[0].toUpperCase();
-  renderMgrCal();
-  renderMgrTimeOff();
-  renderStaff();
-  renderAutoChips();
-  updateNotifBadge();
+  L.user={id:gid,first:gdata.first,last:gdata.last,role:'guard'};
+  DATA.guards=guards;
+  // Update lastSeen
+  if(db) dbSet(`guards/${gid}/lastSeen`,new Date().toISOString()).catch(()=>{});
+  startListeners();
+  mountGuard(gdata.first,gdata.last);
 }
 
 function doLogout(){
   stopListeners();
-  L.user=null; L.clockedIn=false; L.clockInTime=null; L.copiedDay=null;
-  DATA={ config:{}, guards:{}, shifts:{}, swaps:{}, timeOff:{}, eventLog:{}, allTsLog:{}, notifications:{} };
+  L.user=null; L.clockedIn=false; L.clockInTime=null; L.copiedDay=null; L.selectedDay=null;
+  DATA={config:{},guards:{},shifts:{},swaps:{},timeOff:{},eventLog:{},allTsLog:{},notifications:{},availMap:{}};
   hide('guard-app'); hide('mgr-app'); hide('setup-screen');
-  setVal('li-code','');
+  setVal('li-code',''); setVal('li-first',''); setVal('li-last','');
   show('login-screen','flex');
 }
-
 function toggleDD(id){ const e=el(id); if(e) e.classList.toggle('hidden'); }
 
-// ============================================================
-// NAVIGATION
-// ============================================================
-function gNav(screen, btn){
-  ['home','calendar','swaps','timesheet','timeoff'].forEach(s=>{
-    removeClass('g-screen-'+s,'active'); removeClass('g-nav-'+s,'active');
-  });
+// ── MOUNT ─────────────────────────────────────────────────────
+function mountGuard(first,last){
+  hide('loading-screen'); hide('login-screen'); hide('mgr-app'); show('guard-app','flex');
+  setText('g-hdr-name',first);
+  setText('g-greeting',`HEY, ${first.toUpperCase()}!`);
+  setText('g-date',new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}));
+  setText('g-dd-name',`${first} ${last}`);
+  const av=el('g-avatar'); if(av) av.textContent=first[0].toUpperCase();
+  renderNextShift(); renderTimesheet(); renderSwaps(); renderGuardTimeOff(); renderGuardCal();
+  gNav('home');
+}
+
+function mountManager(first,last){
+  hide('loading-screen'); hide('login-screen'); hide('guard-app'); show('mgr-app','flex');
+  setText('m-hdr-name',first);
+  setText('m-greeting',`HEY, ${first.toUpperCase()}!`);
+  setText('m-date',new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}));
+  setText('m-dd-name',`${first} ${last}`);
+  const av=el('m-avatar'); if(av) av.textContent=first[0].toUpperCase();
+  loadCustomTypes();
+  loadSeasonMonths();
+  renderMgrCal(); renderMgrTimeOff(); renderStaff(); renderAutoChips();
+  renderMgrAvailList(); updateNotifBadge();
+  mNav('home');
+}
+
+// ── NAVIGATION ────────────────────────────────────────────────
+function gNav(screen,btn){
+  ['home','calendar','swaps','timesheet','timeoff'].forEach(s=>{ removeClass('g-screen-'+s,'active'); removeClass('g-nav-'+s,'active'); });
   addClass('g-screen-'+screen,'active');
   if(btn) btn.classList.add('active'); else addClass('g-nav-'+screen,'active');
-  if(screen==='swaps')   renderSwaps();
-  if(screen==='timeoff') { renderGuardTimeOff(); loadNotifPrefs(); }
+  if(screen==='swaps') renderSwaps();
+  if(screen==='timeoff'){ renderGuardTimeOff(); renderGuardAvailCal(); loadNotifPrefs(); }
 }
-function mNav(screen, btn){
-  ['home','calendar','timeoff','staff','settings','log','payroll'].forEach(s=>{
-    removeClass('m-screen-'+s,'active'); removeClass('m-nav-'+s,'active');
-  });
+function mNav(screen,btn){
+  ['home','calendar','timeoff','staff','settings','log','payroll'].forEach(s=>{ removeClass('m-screen-'+s,'active'); removeClass('m-nav-'+s,'active'); });
   addClass('m-screen-'+screen,'active');
   if(btn) btn.classList.add('active'); else addClass('m-nav-'+screen,'active');
   if(screen==='timeoff'){ renderMgrTimeOff(); populateMgrTOGuardSelect(); }
-  if(screen==='staff')   renderStaff();
-  if(screen==='log')     { renderEventLog(); markNotifsRead(); }
+  if(screen==='staff') renderStaff();
+  if(screen==='log'){ renderEventLog(); markNotifsRead(); }
   if(screen==='payroll') initPayroll();
-
+  if(screen==='settings'){ renderSeasonMonthChips(); renderCustomTypesList(); const lp=el('last-payout-date'); if(lp&&DATA.config?.lastPayoutDate) lp.value=DATA.config.lastPayoutDate; }
 }
 
-// ============================================================
-// CALENDAR
-// ============================================================
-function renderGuardCal(){
-  const c=el('g-season-cal'); if(!c) return;
-  c.innerHTML=SEASON.map(m=>buildMonth(2026,m,false)).join('');
-}
-function renderMgrCal(){
-  const c=el('m-season-cal'); if(!c) return;
-  c.innerHTML=SEASON.map(m=>buildMonth(2026,m,true)).join('');
-}
-function refreshCals(){ renderGuardCal(); renderMgrCal(); }
-
-function buildMonth(year,month,isMgr){
-  const first=new Date(year,month,1).getDay();
-  const days =new Date(year,month+1,0).getDate();
-  const today =new Date();
-  let cells='';
-  for(let i=0;i<first;i++) cells+=`<div class="cal-cell blank"></div>`;
-  for(let d=1;d<=days;d++){
-    const ds=`${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const dayShifts=shiftsList().filter(s=>s.date===ds);
-    const isToday=today.getDate()===d&&today.getMonth()===month&&today.getFullYear()===year;
-    const isSel=L.selectedDay===ds;
-    const hasShift=dayShifts.length>0;
-    const under=dayShifts.some(s=>(s.assigned||[]).length<s.required);
-    let typeClass='';
-    if(dayShifts.length===1) typeClass=' type-'+dayShifts[0].type;
-    else if(dayShifts.length>1) typeClass=' multi-type';
-    let cls='cal-cell'+(isToday?' today':'')+(isSel?' selected':'')+(hasShift?' has-shift'+typeClass:'')+(under?' understaffed':'');
-    cells+=`<div class="${cls}" onclick="openDayPopup('${ds}',${isMgr})">${d}</div>`;
-  }
-  return`<div class="cal-month"><div class="cal-month-name">${MONTHS[month].toUpperCase()} ${year}</div>
-    <div class="cal-grid">${DAY_HDRS.map(h=>`<div class="cal-hdr">${h}</div>`).join('')}${cells}</div></div>`;
-}
-
-// ============================================================
-// DAY POPUP
-// ============================================================
-function openDayPopup(ds, isMgr){
-  L.selectedDay=ds; refreshCals();
-  const shifts=shiftsList().filter(s=>s.date===ds);
-  setText('ov-day-title', fmtLong(ds));
-  let body=shifts.length ? shifts.map(sh=>shiftCardHTML(sh,isMgr,ds)).join('') : '<p class="empty">No shifts scheduled.</p>';
-  setHTML('ov-day-body', body);
-  const mgrBtns=el('ov-day-mgr-btns');
-  if(mgrBtns) mgrBtns.style.display=isMgr?'block':'none';
-  if(isMgr){
-    const pb=el('paste-day-btn');
-    if(pb){ pb.style.display=L.copiedDay?'inline-block':'none';
-      if(L.copiedDay) pb.textContent=`📌 Paste from ${fmtShort(L.copiedDay)}`; }
-  }
-  openOv('ov-day');
-}
-
-function shiftCardHTML(sh, isMgr, ds){
-  const names=(sh.assigned||[]).map(id=>gName(id)).join(', ');
-  const under=(sh.assigned||[]).length<sh.required;
-  const tLabel=sh.type==='custom'?sh.customType:(TYPE_LABELS[sh.type]||sh.type);
-  const tCls=getShiftTypeBadgeClass(sh);
-  let cardCls='shift-card'+(sh.type==='party'?' party-card':sh.type==='swim'?' swim-card':under?' under-card':'');
-  let h=`<div class="${cardCls}">
-    <span class="type-badge ${tCls}">${tLabel}</span>
-    <div class="s-time">${fmt12(sh.start)} – ${fmt12(sh.end)}</div>
-    <div class="s-guards">${names||'No one assigned'} &nbsp;(${(sh.assigned||[]).length}/${sh.required})</div>`;
-  if(sh.arriveTime) h+=`<div class="s-note" style="color:var(--yellow)">⏰ Arrive by ${fmt12(sh.arriveTime)}</div>`;
-  if(sh.note)       h+=`<div class="s-note">📝 ${sh.note}</div>`;
-  if(under)         h+=`<div class="s-warn">⚠️ Needs ${sh.required-(sh.assigned||[]).length} more</div>`;
-  if(isMgr) h+=`<div class="s-actions">
-    <button class="btn btn-sm btn-ghost" onclick="editShift('${sh.id}')">✏️ Edit</button>
-    <button class="btn btn-sm btn-danger" onclick="delShift('${sh.id}')">🗑 Delete</button>
-  </div>`;
-  h+='</div>';
-  return h;
-}
-
-function copyDay(){
-  L.copiedDay=L.selectedDay;
-  toast(`Copied ${fmtShort(L.selectedDay)} — open another day to paste`,'warn');
-  closeOv('ov-day');
-}
-async function pasteDay(){
-  if(!L.copiedDay||!L.selectedDay) return;
-  const src=shiftsList().filter(s=>s.date===L.copiedDay);
-  if(!src.length){ toast('No shifts to paste','err'); return; }
-  const existing=shiftsList().filter(s=>s.date===L.selectedDay);
-  let added=0;
-  for(const sh of src){
-    if(!existing.find(s=>s.start===sh.start)){
-      const id=newKey();
-      await dbSet(`shifts/${id}`,{...sh, id, date:L.selectedDay, assigned:sh.assigned||[]});
-      added++;
-    }
-  }
-  refreshCals(); openDayPopup(L.selectedDay,true);
-  toast(`Pasted ${added} shift(s) from ${fmtShort(L.copiedDay)}`);
-}
-
-// ============================================================
-// SHIFT ADD / EDIT
-// ============================================================
-function openAddShiftFromDay(){ openAddShift(L.selectedDay); closeOv('ov-day'); }
-function openAddShift(date){
-  setText('ov-shift-title','ADD SHIFT');
-  setVal('sh-date', date||''); setVal('sh-start','14:00'); setVal('sh-end','20:00');
-  setVal('sh-arrive','');
-  setVal('sh-type','regular'); const cw=el('sh-custom-wrap'); if(cw) cw.style.display='none';
-  setVal('sh-custom',''); setVal('sh-req','2'); setVal('sh-note','');
-  setCheck('sh-repeat',false); hide('sh-repeat-days');
-  setVal('sh-edit-id','');
-  buildAssignChips([]); hide('sh-to-warn');
-  openOv('ov-shift');
-}
-
-function editShift(id){
-  const sh=(DATA.shifts||{})[id]; if(!sh) return;
-  setText('ov-shift-title','EDIT SHIFT');
-  setVal('sh-date',sh.date); setVal('sh-start',sh.start); setVal('sh-end',sh.end);
-  setVal('sh-arrive',sh.arriveTime||'');
-  setVal('sh-type',sh.type);
-  const cw=el('sh-custom-wrap'); if(cw) cw.style.display=sh.type==='custom'?'block':'none';
-  setVal('sh-custom',sh.customType||''); setVal('sh-req',String(sh.required)); setVal('sh-note',sh.note||'');
-  setCheck('sh-repeat',false); hide('sh-repeat-days');
-  setVal('sh-edit-id',id);
-  buildAssignChips(sh.assigned||[]); hide('sh-to-warn');
-  closeOv('ov-day'); openOv('ov-shift');
-}
-
-function onTypeChange(){
-  const t=getVal('sh-type');
-  const cw=el('sh-custom-wrap'); if(cw) cw.style.display=t==='custom'?'block':'none';
-  if(TYPE_REQ[t]) setVal('sh-req',String(TYPE_REQ[t]));
-}
-
-
-
-function toggleAssignChip(id, chipEl){
-  const date=getVal('sh-date');
-  const idx=L.assignChipSelected.indexOf(id);
-  if(idx>=0){ L.assignChipSelected.splice(idx,1); chipEl.classList.remove('on'); }
-  else {
-    if(date&&isTO(id,date)){
-      const w=el('sh-to-warn');
-      if(w){ w.textContent=`⚠️ ${gName(id)} has approved time off on ${fmtShort(date)}. Schedule anyway?`; w.style.display='block'; }
-    }
-    L.assignChipSelected.push(id); chipEl.classList.add('on');
-  }
-  if(!L.assignChipSelected.some(gid=>date&&isTO(gid,date))) hide('sh-to-warn');
-}
-
-async function saveShift(){
-  const date=getVal('sh-date'), start=getVal('sh-start'), end=getVal('sh-end');
-  const arriveTime=getVal('sh-arrive');
-  const type=getVal('sh-type'), customType=getVal('sh-custom').trim();
-  const required=parseInt(getVal('sh-req')), note=getVal('sh-note').trim();
-  const repeat=getCheck('sh-repeat'), editId=getVal('sh-edit-id');
-  if(!date||!start||!end){ toast('Fill in date and times','err'); return; }
-  if(end<=start){ toast('End time must be after start time','err'); return; }
-  if(type==='custom'&&!customType){ toast('Enter a custom type name','err'); return; }
-
-  const shiftData = { date,start,end,arriveTime,type,customType,required,note,assigned:L.assignChipSelected };
-
-  if(editId){
-    await dbUpdate(`shifts/${editId}`, shiftData);
-    logEvent('shift_edited','Manager',`Shift edited: ${date} ${fmt12(start)}–${fmt12(end)}`,{});
-    toast('Shift updated!');
-  } else if(repeat){
-    const dayChips=document.querySelectorAll('#sh-repeat-days [data-day]');
-    const activeDays=new Set([...dayChips].filter(c=>c.classList.contains('on')).map(c=>parseInt(c.dataset.day)));
-    if(!activeDays.size){ toast('Select at least one repeat day','err'); return; }
-    const endDate=new Date('2026-08-31'); let cur=new Date(date); let added=0;
-    while(cur<=endDate){
-      if(activeDays.has(cur.getDay())){
-        const ds=cur.toISOString().slice(0,10);
-        if(!shiftsList().find(s=>s.date===ds&&s.start===start)){
-          const id=newKey();
-          await dbSet(`shifts/${id}`,{...shiftData,id,date:ds,assigned:[]});
-          added++;
-        }
-      }
-      cur.setDate(cur.getDate()+1);
-    }
-    logEvent('shift_added','Manager',`${added} repeat shifts created`,{});
-    toast(`${added} shifts created!`);
-  } else {
-    const id=newKey();
-    await dbSet(`shifts/${id}`,{...shiftData,id});
-    logEvent('shift_added','Manager',`Shift added: ${type==='custom'?customType:type} on ${date}, ${fmt12(start)}–${fmt12(end)}${arriveTime?' (arrive '+fmt12(arriveTime)+')':''}`,{});
-    toast('Shift added!');
-  }
-  closeOv('ov-shift');
-}
-
-async function delShift(id){
-  const sh=(DATA.shifts||{})[id];
-  confirmAction('DELETE SHIFT','This shift will be permanently removed.','Delete Shift', async ()=>{
-    await dbRemove(`shifts/${id}`);
-    logEvent('shift_deleted','Manager',`Shift deleted: ${sh?sh.date+' '+fmt12(sh.start)+'–'+fmt12(sh.end):''}`,{});
-    closeOv('ov-day'); toast('Shift deleted');
-  });
-}
-
-function toggleRepeatDays(){ const p=el('sh-repeat-days'); if(p) p.style.display=getCheck('sh-repeat')?'block':'none'; }
-function toggleRepeatDay(chip){ chip.classList.toggle('on'); }
-
-// ============================================================
-// EXCEL IMPORT
-// ============================================================
-function openExcelImport(){ openOv('ov-excel'); }
-async function handleExcelUpload(evt){
-  const file=evt.target.files[0]; if(!file) return;
-  // Load SheetJS
-  if(!window.XLSX){
-    await new Promise((res,rej)=>{
-      const s=document.createElement('script');
-      s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-      s.onload=res; s.onerror=rej; document.head.appendChild(s);
-    });
-  }
-  const buf=await file.arrayBuffer();
-  const wb=window.XLSX.read(buf,{type:'array'});
-  const ws=wb.Sheets[wb.SheetNames[0]];
-  const rows=window.XLSX.utils.sheet_to_json(ws,{raw:false});
-  let added=0, errors=[];
-  for(const row of rows){
-    const date=(row['Date']||'').trim();
-    const start=(row['Start']||'').trim();
-    const end=(row['End']||'').trim();
-    const type=(row['Type']||'regular').trim().toLowerCase();
-    const required=parseInt(row['Guards Required']||'2');
-    const arriveTime=(row['Arrive By']||'').trim();
-    const note=(row['Notes']||'').trim();
-    if(!date||!start||!end){ errors.push(`Row missing date/start/end`); continue; }
-    if(end<=start){ errors.push(`${date}: end before start`); continue; }
-    const id=newKey();
-    const mappedType=type.includes('party')?'party':type.includes('swim')?'swim':type.includes('custom')?'custom':'regular';
-    await dbSet(`shifts/${id}`,{id,date,start,end,arriveTime,type:mappedType,customType:type,required:isNaN(required)?2:required,note,assigned:[]});
-    added++;
-  }
-  closeOv('ov-excel');
-  logEvent('shift_added','Manager',`${added} shifts imported from Excel`,{});
-  toast(added>0?`✓ ${added} shifts imported${errors.length?' ('+errors.length+' skipped)':''}`:'No valid shifts found','warn');
-  if(errors.length) console.warn('Excel import errors:', errors);
-}
-
-function downloadExcelTemplate(){
-  if(!window.XLSX){
-    const s=document.createElement('script');
-    s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-    s.onload=buildTemplate; document.head.appendChild(s);
-  } else { buildTemplate(); }
-}
-function buildTemplate(){
-  const ws=window.XLSX.utils.aoa_to_sheet([
-    ['Date','Start','End','Type','Guards Required','Arrive By','Notes'],
-    ['2026-06-01','14:00','20:00','Regular','2','',''],
-    ['2026-06-02','13:00','19:00','Party','3','12:30','Birthday party'],
-    ['2026-06-03','10:00','14:00','Swim Meet','3','09:45',''],
-  ]);
-  const wb=window.XLSX.utils.book_new();
-  window.XLSX.utils.book_append_sheet(wb,ws,'Shifts');
-  window.XLSX.writeFile(wb,'waveguard_shift_template.xlsx');
-  toast('Template downloaded!');
-}
-
-// ============================================================
-// AUTO SCHEDULE
-// ============================================================
-function renderAutoChips(){
-  const c=el('auto-chips'); if(!c) return;
-  c.innerHTML=guardsList().map(g=>`<div class="chip${L.autoSelectedGuards.includes(g.id)?' on':''}" onclick="toggleAutoChip('${g.id}',this)">${g.first}${g.type==='backup'?' ⭐':''}</div>`).join('');
-}
-function toggleAutoChip(id,chip){ const i=L.autoSelectedGuards.indexOf(id); i>=0?L.autoSelectedGuards.splice(i,1):L.autoSelectedGuards.push(id); chip.classList.toggle('on',L.autoSelectedGuards.includes(id)); }
-function openAutoSchedule(){ renderAutoChips(); openOv('ov-auto'); }
-
-async function runAutoSchedule(){
-  const from=getVal('auto-from'), to=getVal('auto-to');
-  if(!from||!to){ toast('Set date range','err'); return; }
-  const prog=el('auto-prog'); if(prog) prog.style.display='block';
-  const runBtn=el('auto-run-btn'); if(runBtn) runBtn.disabled=true;
-  setTimeout(()=>{ const f=el('auto-fill'); if(f) f.style.width='100%'; },80);
-
-  const regular=guardsList().filter(g=>g.type==='regular');
-  const backup =guardsList().filter(g=>g.type==='backup');
-  const pool   =L.autoSelectedGuards.length>0?guardsList().filter(g=>L.autoSelectedGuards.includes(g.id)):regular;
-  const counts={}; guardsList().forEach(g=>counts[g.id]=0);
-
-  const updates={};
-  for(const [sid,sh] of Object.entries(DATA.shifts||{})){
-    if(sh.date<from||sh.date>to) continue;
-    const assigned=[...(sh.assigned||[])];
-    if(assigned.length>=sh.required) continue;
-    const need=sh.required-assigned.length;
-    const avail=pool.filter(g=>!assigned.includes(g.id)&&!isTO(g.id,sh.date)).sort((a,b)=>(counts[a.id]||0)-(counts[b.id]||0));
-    let filled=0;
-    for(const g of avail){ if(filled>=need) break; assigned.push(g.id); counts[g.id]=(counts[g.id]||0)+1; filled++; }
-    if(assigned.length<sh.required){
-      const bk=backup.filter(g=>!assigned.includes(g.id)&&!isTO(g.id,sh.date)).sort((a,b)=>(counts[a.id]||0)-(counts[b.id]||0));
-      for(const g of bk){ if(assigned.length>=sh.required) break; assigned.push(g.id); counts[g.id]=(counts[g.id]||0)+1; }
-    }
-    updates[`shifts/${sid}/assigned`]=assigned;
-  }
-  if(Object.keys(updates).length>0) await db.ref(DB_ROOT).update(updates);
-
-  setTimeout(()=>{
-    if(prog) prog.style.display='none';
-    const fill=el('auto-fill'); if(fill) fill.style.width='0';
-    if(runBtn) runBtn.disabled=false;
-    L.autoSelectedGuards=[];
-    logEvent('auto_schedule','Manager','Auto-schedule run for season',{});
-    toast('Season scheduled!');
-  },2300);
-  closeOv('ov-auto');
-}
-
-// ============================================================
-// COPY WEEK
-// ============================================================
-function openCopyWeek(){ openOv('ov-copyweek'); }
-async function doCopyWeek(){
-  const from=getVal('cw-from'), to=getVal('cw-to'), copyAssign=getCheck('cw-assign');
-  if(!from||!to){ toast('Set both dates','err'); return; }
-  const fSun=new Date(from+'T12:00:00'), tSun=new Date(to+'T12:00:00');
-  let added=0;
-  for(let off=0;off<7;off++){
-    const sd=new Date(fSun); sd.setDate(fSun.getDate()+off);
-    const td=new Date(tSun); td.setDate(tSun.getDate()+off);
-    const sds=sd.toISOString().slice(0,10), tds=td.toISOString().slice(0,10);
-    const srcShifts=shiftsList().filter(s=>s.date===sds);
-    for(const sh of srcShifts){
-      if(!shiftsList().find(s=>s.date===tds&&s.start===sh.start)){
-        const id=newKey();
-        await dbSet(`shifts/${id}`,{...sh,id,date:tds,assigned:copyAssign?sh.assigned||[]:[]});
-        added++;
-      }
-    }
-  }
-  closeOv('ov-copyweek'); toast(`Copied week: ${added} shifts pasted`);
-}
-
-// ============================================================
-// NEXT SHIFT
-// ============================================================
-function renderNextShift(){
-  const guard=me(); if(!guard) return;
-  const nDate=el('g-next-date'), nTime=el('g-next-time');
-  if(!nDate||!nTime) return;
-  const today=new Date().toISOString().slice(0,10);
-  const up=shiftsList().filter(s=>s.date>=today&&(s.assigned||[]).includes(L.user.id)).sort((a,b)=>a.date.localeCompare(b.date))[0];
-  nDate.textContent=up?fmtShort(up.date):'No upcoming shifts';
-  nTime.textContent=up?`${fmt12(up.start)} – ${fmt12(up.end)}`+(up.arriveTime?` · Arrive by ${fmt12(up.arriveTime)}`:''): '';
-}
-
-// ============================================================
-// CLOCK IN/OUT
-// ============================================================
-function clockIn(){
-  if(L.clockedIn) return;
-  L.clockedIn=true; L.clockInTime=new Date();
-  hide('g-btn-ci'); show('g-btn-co');
-  const sb=el('g-clock-status'); if(sb) sb.className='status-bar sb-in';
-  const txt=el('g-clock-txt'); if(txt) txt.textContent=`Clocked in at ${L.clockInTime.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`;
-  const dot=sb?.querySelector('.dot'); if(dot) dot.classList.add('pulse');
-  logEvent('clock_in',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} clocked in`,{});
-  toast('Clocked in ✓');
-}
-async function clockOut(){
-  if(!L.clockedIn) return;
-  const out=new Date(), hrs=parseFloat(((out-L.clockInTime)/3600000).toFixed(2));
-  const inStr=L.clockInTime.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
-  const outStr=out.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
-  const date=new Date().toISOString().slice(0,10);
-  const tsId=newKey();
-  await dbSet(`allTsLog/${tsId}`,{guardId:L.user.id,date,in:inStr,out:outStr,hrs});
-  L.clockedIn=false; L.clockInTime=null;
-  show('g-btn-ci'); hide('g-btn-co');
-  const sb=el('g-clock-status'); if(sb) sb.className='status-bar sb-out';
-  const txt=el('g-clock-txt'); if(txt) txt.textContent='Not clocked in';
-  const dot=sb?.querySelector('.dot'); if(dot) dot.classList.remove('pulse');
-  logEvent('clock_out',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} clocked out after ${hrs} hrs`,{hrs});
-  renderTimesheet();
-  toast(`Clocked out — ${hrs} hrs logged`);
-}
-
-// ============================================================
-// TIMESHEET (guard's own)
-// ============================================================
-function renderTimesheet(){
-  const hrsEl=el('g-total-hrs'), payEl=el('g-pay-est'), logEl=el('g-ts-log');
-  if(!hrsEl||!payEl||!logEl) return;
-  const myLog=Object.values(DATA.allTsLog||{}).filter(e=>e.guardId===L.user?.id);
-  const total=myLog.reduce((s,r)=>s+r.hrs,0);
-  const rate=(DATA.config?.hourlyRate)||15;
-  hrsEl.textContent=total.toFixed(1);
-  payEl.textContent=`Est. $${(total*rate).toFixed(2)}`;
-  logEl.innerHTML=myLog.length
-    ?[...myLog].sort((a,b)=>b.date.localeCompare(a.date)).map(e=>`<div class="ts-row"><div><div class="ts-date">${e.date}</div><div style="font-size:.71rem;color:var(--muted)">${e.in} → ${e.out}</div></div><div class="ts-hrs">${e.hrs.toFixed(2)} hrs</div></div>`).join('')
-    :'<p class="empty">No entries yet.</p>';
-}
-
-// ============================================================
-// SICK / CLOSURE
-// ============================================================
-function openSickModal(){
-  const today=new Date().toISOString().slice(0,10);
-  const mine=shiftsList().filter(s=>s.date===today&&(s.assigned||[]).includes(L.user?.id));
-  const sel=el('sick-sel'); if(!sel) return;
-  sel.innerHTML=mine.length?mine.map(s=>`<option value="${s.id}">Today ${fmt12(s.start)}–${fmt12(s.end)}</option>`).join(''):'<option>No shifts today</option>';
-  openOv('ov-sick');
-}
-function confirmSick(){
-  const shiftId=getVal('sick-sel');
-  const shift=(DATA.shifts||{})[shiftId];
-  const actor=`${L.user.first} ${L.user.last}`;
-  logEvent('sick_alert',actor,`${actor} called in sick${shift?' for '+fmt12(shift.start)+'–'+fmt12(shift.end)+' shift':''}`,{shiftId});
-  // Post to GroupMe
-  const gmMsg = `🚨 EMERGENCY COVERAGE NEEDED!\n${actor} can't make their shift${shift?' ('+fmt12(shift.start)+'–'+fmt12(shift.end)+')':''}\nIf you can cover, accept in the WaveGuard app ASAP!`;
-  postGroupMe(gmMsg);
-  closeOv('ov-sick'); toast('🚨 Emergency alert sent!');
-}
-function openClosureModal(){ openOv('ov-closure'); }
-function sendClosure(){
-  const reason=getVal('cl-reason').trim(), msg=getVal('cl-msg').trim();
-  const date=getVal('cl-date'), tS=getVal('cl-time-start'), tE=getVal('cl-time-end');
-  if(!reason){ toast('Enter a reason','err'); return; }
-  if(!date){ toast('Enter a date','err'); return; }
-  if(!tS||!tE){ toast('Enter start and end times','err'); return; }
-  if(tE<=tS){ toast('End must be after start','err'); return; }
-  logEvent('closure_alert','Manager',`Pool closure: ${reason} on ${date} ${fmt12(tS)}–${fmt12(tE)}${msg?' — '+msg:''}`,{});
-  // Post to GroupMe
-  const gmClosure = `⚠️ POOL CLOSURE\n📅 ${date}\n🕐 ${fmt12(tS)} – ${fmt12(tE)}\n❗ Reason: ${reason}${msg?' — '+msg:''}`;
-  postGroupMe(gmClosure);
-  closeOv('ov-closure');
-  setVal('cl-reason',''); setVal('cl-msg',''); setVal('cl-date',''); setVal('cl-time-start',''); setVal('cl-time-end','');
-  toast('⚠️ Pool closure alert sent via GroupMe!');
-}
-
-// ============================================================
-// SWAPS
-// ============================================================
-function openSwapModal(mode){
-  L.swapMode=mode;
-  const isSwap=mode==='swap';
-  setText('ov-swap-title', isSwap?'REQUEST SWAP':'GIVE SHIFT AWAY');
-  const today=new Date().toISOString().slice(0,10);
-  const myShifts=shiftsList().filter(s=>s.date>=today&&(s.assigned||[]).includes(L.user?.id));
-  const opts=myShifts.length?myShifts.map(s=>`<option value="${s.id}">${fmtShort(s.date)} · ${fmt12(s.start)}–${fmt12(s.end)}</option>`).join(''):'<option value="">No upcoming shifts</option>';
-  let html=`<div class="fg"><label>Shift to ${isSwap?'Swap':'Give Away'}</label><select id="sw-myshift">${opts}</select></div>`;
-  if(isSwap){
-    const others=guardsList().filter(g=>g.id!==L.user?.id);
-    html+=`<div class="fg"><label>Swap with</label><select id="sw-with">${others.map(g=>`<option value="${g.id}">${g.first} ${g.last}${g.type==='backup'?' ⭐':''}</option>`).join('')}</select></div>`;
-    html+=`<div class="info-box">They'll pick one of their shifts to offer you back.</div>`;
-  } else {
-    html+=`<div class="info-box">Broadcasts to all guards. First to accept wins.</div>`;
-  }
-  html+=`<div class="fg"><label>Message (optional)</label><input type="text" id="sw-msg" placeholder="e.g. Doctor appointment"/></div>`;
-  setHTML('ov-swap-body', html);
-  const btn=el('swap-submit-btn'); if(btn) btn.textContent=isSwap?'Send Swap Request':'Broadcast to All';
-  openOv('ov-swap');
-}
-
-async function sendSwapRequest(){
-  const shiftId=getVal('sw-myshift'), msg=getVal('sw-msg');
-  if(!shiftId){ toast('No shift selected','err'); return; }
-  const id=newKey();
-  if(L.swapMode==='swap'){
-    const toId=getVal('sw-with'); if(!toId){ toast('Select a guard','err'); return; }
-    await dbSet(`swaps/${id}`,{id,type:'swap',from:L.user.id,to:toId,shiftId,offerShiftId:null,message:msg,status:'pending',rounds:0});
-    logEvent('swap_request',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} requested a swap with ${gName(toId)}`,{});
-    toast('Swap request sent!');
-  } else {
-    await dbSet(`swaps/${id}`,{id,type:'give',from:L.user.id,to:null,shiftId,offerShiftId:null,message:msg,status:'broadcast',rounds:0});
-    logEvent('give_request',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} is giving away a shift`,{});
-    // Post to GroupMe
-    const giveSh=(DATA.shifts||{})[shiftId];
-    const giveDesc=giveSh?`${giveSh.date} ${fmt12(giveSh.start)}–${fmt12(giveSh.end)}`:'a shift';
-    postGroupMe(`📢 SHIFT AVAILABLE!\n${L.user.first} ${L.user.last} is giving away their shift:\n📅 ${giveDesc}\nFirst to accept in the WaveGuard app gets it!`);
-    toast('Broadcast sent!');
-  }
-  closeOv('ov-swap');
-}
-
-function renderSwaps(){
-  const inEl=el('g-swaps-in'), outEl=el('g-swaps-out');
-  if(!inEl||!outEl) return;
-  const myId=L.user?.id;
-  const incoming=swapsList().filter(r=>(r.type==='give'&&r.status==='broadcast'&&r.from!==myId)||(r.to===myId&&['pending','countered'].includes(r.status)));
-  const outgoing=swapsList().filter(r=>r.from===myId&&['pending','broadcast','countered'].includes(r.status));
-  inEl.innerHTML=incoming.length?incoming.map(r=>swapCardHTML(r,'in',myId)).join(''):'<p class="empty">No incoming requests.</p>';
-  outEl.innerHTML=outgoing.length?outgoing.map(r=>swapCardHTML(r,'out',myId)).join(''):'<p class="empty">No outgoing requests.</p>';
-}
-
-function swapCardHTML(r,dir,myId){
-  const fromG=(DATA.guards||{})[r.from];
-  const shift=(DATA.shifts||{})[r.shiftId];
-  let badge=r.type==='give'?`<span class="badge b-yellow">📢 Give Away</span>`:`<span class="badge b-blue">🔄 Swap</span>`;
-  let h=`<div class="swap-card">${badge}`;
-  if(dir==='in'){
-    h+=`<div class="sw-head">${r.type==='give'?fromG?.first+' is giving away a shift':fromG?.first+' wants to swap with you'}</div>`;
-    h+=`<div class="sw-detail">Shift: ${shift?`${fmtShort(shift.date)} · ${fmt12(shift.start)}–${fmt12(shift.end)}`:'—'}</div>`;
-    if(r.message) h+=`<div class="sw-msg">"${r.message}"</div>`;
-    h+=`<div class="sw-actions">`;
-    if(r.type==='give') h+=`<button class="btn btn-sm btn-green" onclick="acceptGive('${r.id}')">✓ Accept Shift</button>`;
-    else h+=`<button class="btn btn-sm btn-green" onclick="acceptSwapSimple('${r.id}')">✓ Accept Swap</button>`;
-    h+=`<button class="btn btn-sm btn-danger" onclick="declineSwap('${r.id}')">✕ Decline</button></div>`;
-  } else {
-    const toG=(DATA.guards||{})[r.to];
-    h+=`<div class="sw-head">${r.type==='give'?'You broadcast a give-away':`Swap request to ${toG?toG.first:'?'}`}</div>`;
-    h+=`<div class="sw-detail">${shift?`${fmtShort(shift.date)} · ${fmt12(shift.start)}–${fmt12(shift.end)}`:'—'}</div>`;
-    h+=`<span class="badge b-gray">${r.type==='give'?'📢 Broadcast':'⏳ Pending response'}</span>`;
-    h+=`<div class="sw-actions"><button class="btn btn-sm btn-danger" onclick="declineSwap('${r.id}')">Cancel</button></div>`;
-  }
-  return h+'</div>';
-}
-
-async function acceptSwapSimple(swapId){
-  // Simple accept — swap the shift assignments
-  const r=(DATA.swaps||{})[swapId]; if(!r) return;
-  const sh1=(DATA.shifts||{})[r.shiftId];
-  if(sh1){
-    const assigned=[...(sh1.assigned||[])];
-    // Replace requester with accepter
-    const fromIdx=assigned.indexOf(r.from);
-    if(fromIdx>=0) assigned[fromIdx]=r.to;
-    else if(!assigned.includes(r.to)) assigned.push(r.to);
-    // Remove accepter from their own if they were already there weirdly
-    await dbUpdate(`shifts/${r.shiftId}`,{assigned});
-  }
-  await dbUpdate(`swaps/${swapId}`,{status:'completed'});
-  logEvent('swap_accepted',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} accepted a swap with ${gName(r.from)}`,{});
-  toast('Swap accepted! ✓');
-}
-
-// ============================================================
-// MANUAL HOUR ADJUSTMENT
-// ============================================================
-function openHourAdjustment(guardId){
-  const sel=el('adj-guard-sel');
-  if(sel){
-    sel.innerHTML=guardsList().map(g=>`<option value="${g.id}">${g.first} ${g.last}</option>`).join('');
-    if(guardId) sel.value=guardId;
-  }
-  setVal('adj-hours-val','');
-  setVal('adj-hours-date',toDS(new Date()));
-  setVal('adj-hours-desc','');
-  setVal('adj-from-profile', guardId||'');
-  hide('adj-payroll-note');
-  openOv('ov-adj-hours');
-}
-
-// adj-hours-date listener wired via HTML onchange attribute
-function checkAdjDate(){
-  const date=getVal('adj-hours-date');
-  const lastPayout=DATA.config?.lastPayoutDate||'';
-  const note=el('adj-payroll-note');
-  if(!note) return;
-  if(lastPayout && date<=lastPayout){
-    note.textContent=`This date is before or on the last payout (${lastPayout}). This adjustment will appear in the timesheet history but will NOT affect the current payroll period.`;
-    note.style.display='block';
-  } else {
-    note.textContent=`This date is within the current pay period — this adjustment WILL affect the current payroll total.`;
-    note.style.background='rgba(45,212,160,.06)'; note.style.borderColor='rgba(45,212,160,.18)'; note.style.color='var(--green)';
-    note.style.display='block';
-  }
-}
-
-async function saveHourAdjustment(){
-  const guardId=getVal('adj-guard-sel');
-  const hrs=parseFloat(getVal('adj-hours-val'));
-  const date=getVal('adj-hours-date');
-  const desc=getVal('adj-hours-desc').trim();
-  if(!guardId){toast('Select a guard','err');return;}
-  if(isNaN(hrs)||hrs===0){toast('Enter a non-zero hour value','err');return;}
-  if(!date){toast('Select a date','err');return;}
-  const g=(DATA.guards||{})[guardId];
-  const gname=g?`${g.first} ${g.last}`:'?';
-  const sign=hrs>0?'+':'';
-  const id=newKey();
-  const entry={
-    guardId, date, in:'—', out:'—',
-    hrs: Math.abs(hrs),
-    adjustment: hrs, // signed
-    isAdjustment: true,
-    description: desc||'Manual adjustment'
-  };
-  await dbSet(`allTsLog/${id}`, entry);
-  logEvent('clock_out','Manager',
-    `Manual hour adjustment for ${gname}: ${sign}${hrs} hrs on ${date}${desc?' — '+desc:''}`,
-    {guardId,hrs,date}
-  );
-  closeOv('ov-adj-hours');
-  toast(`${sign}${hrs} hrs applied to ${gname}`);
-}
-
-// ============================================================
-// BULK APPROVE TIME OFF
-// ============================================================
-async function bulkApproveTO(){
-  const pending=toList().filter(t=>t.status==='pending');
-  if(!pending.length){toast('No pending requests','warn');return;}
-  const updates={};
-  pending.forEach(t=>{ updates[`timeOff/${t.id}/status`]='approved'; });
-  await db.ref(DB_ROOT).update(updates);
-  logEvent('time_off_approved','Manager',`Bulk approved ${pending.length} time off request${pending.length>1?'s':''}`,{});
-  toast(`✓ ${pending.length} request${pending.length>1?'s':''} approved`);
-}
-
-// ============================================================
-// PRINT SCHEDULE
-// ============================================================
-function printSchedule(){
-  const allShifts=shiftsList().sort((a,b)=>a.date.localeCompare(b.date));
-  const dayMap={};
-  allShifts.forEach(sh=>{
-    if(!dayMap[sh.date]) dayMap[sh.date]=[];
-    dayMap[sh.date].push(sh);
-  });
-  const html=Object.entries(dayMap).map(([date,shifts])=>{
-    const dayLabel=new Date(date+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
-    const shiftRows=shifts.map(sh=>{
-      const names=(sh.assigned||[]).map(id=>gName(id)).join(', ')||'Unassigned';
-      const hrs=timeToHours(sh.start,sh.end);
-      const type=sh.type==='custom'?sh.customType:(TYPE_LABELS[sh.type]||sh.type);
-      return`<div class="print-shift"><strong>${fmt12(sh.start)} – ${fmt12(sh.end)}</strong> · ${type} · ${hrs}h &nbsp;|&nbsp; ${names}${sh.arriveTime?' (Arrive by '+fmt12(sh.arriveTime)+')':''}</div>`;
-    }).join('');
-    return`<div class="print-day"><div class="print-day-hdr">${dayLabel}</div>${shiftRows}</div>`;
-  }).join('');
-  const win=window.open('','_blank');
-  win.document.write(`<!DOCTYPE html><html><head><title>WaveGuard Season Schedule</title>
-    <style>body{font-family:sans-serif;padding:2rem;max-width:800px;margin:0 auto;}
-    .print-day{margin-bottom:1.5rem;page-break-inside:avoid;}
-    .print-day-hdr{font-weight:700;font-size:1rem;border-bottom:2px solid #333;padding-bottom:.3rem;margin-bottom:.5rem;}
-    .print-shift{font-size:.88rem;margin-bottom:.3rem;padding:.2rem 0;border-bottom:1px solid #eee;}
-    h1{text-align:center;margin-bottom:2rem;}
-    @media print{button{display:none;}}
-    </style></head><body>
-    <h1>WaveGuard — Season 2026 Schedule</h1>
-    <p style="text-align:center;color:#666;margin-bottom:2rem;">Printed ${new Date().toLocaleDateString()}</p>
-    <button onclick="window.print()" style="margin-bottom:1.5rem;padding:.5rem 1.5rem;cursor:pointer;">🖨️ Print</button>
-    ${html||'<p>No shifts scheduled yet.</p>'}
-    </body></html>`);
-  win.document.close();
-}
-
-function timeToHours(start,end){
-  const [sh,sm]=start.split(':').map(Number);
-  const [eh,em]=end.split(':').map(Number);
-  return ((eh*60+em)-(sh*60+sm))/60;
-}
-
-// ============================================================
-// COPY DAY INDICATOR on calendar
-// ============================================================
-function buildMonthWithCopyIndicator(year,month,isMgr){
-  const first=new Date(year,month,1).getDay();
-  const days=new Date(year,month+1,0).getDate();
-  const today=new Date();
-  let cells='';
-  for(let i=0;i<first;i++) cells+=`<div class="cal-cell blank"></div>`;
-  for(let d=1;d<=days;d++){
-    const ds=`${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const ds_shifts=shiftsList().filter(s=>s.date===ds);
-    const isToday=today.getDate()===d&&today.getMonth()===month&&today.getFullYear()===year;
-    const isSel=L.selectedDay===ds;
-    const isCopied=L.copiedDay===ds;
-    const hasShift=ds_shifts.length>0;
-    const under=ds_shifts.some(s=>(s.assigned||[]).length<s.required);
-    let typeClass='';
-    if(ds_shifts.length===1) typeClass=' '+getCalDotClass(ds_shifts[0]);
-    else if(ds_shifts.length>1) typeClass=' multi-type';
-    let cls='cal-cell'+(isToday?' today':'')+(isSel?' selected':'')+(hasShift?' has-shift'+typeClass:'')+(under?' understaffed':'')+(isCopied?' copied-day':'');
-    cells+=`<div class="${cls}" onclick="openDayPopup('${ds}',${isMgr})">${d}</div>`;
-  }
-  return`<div class="cal-month"><div class="cal-month-name">${ALL_MONTHS[month].toUpperCase()} ${year}</div>
-    <div class="cal-grid">${[...Array(7)].map((_,i)=>`<div class="cal-hdr">${['Su','Mo','Tu','We','Th','Fr','Sa'][i]}</div>`).join('')}${cells}</div></div>`;
-}
-
-// Override buildMonth to use copy indicator version
-const _origBuildMonth = buildMonth;
-function buildMonth(year,month,isMgr){ return buildMonthWithCopyIndicator(year,month,isMgr); }
-
-// ============================================================
-// SETTINGS — save/load last payout date
-// ============================================================
-// Override saveSettings to also save lastPayoutDate
-const _origSaveSettings = saveSettings;
-async function saveSettings(){
-  const rate=parseFloat(getVal('m-rate'))||15;
-  const gme=getVal('m-gme').trim();
-  const rhr=parseFloat(getVal('m-reminder'))||2;
-  const lastPayout=getVal('last-payout-date')||'';
-  await dbUpdate('config',{hourlyRate:rate,groupmeBotId:gme,reminderHrs:rhr,lastPayoutDate:lastPayout});
-  toast('Settings saved!');
-}
-
-// ============================================================
-// HOOK INTO mountManager / mountGuard
-// ============================================================
-const _origMountManager = mountManager;
-function mountManager(first, last){
-  _origMountManager(first, last);
-  loadCustomTypes();
-  loadSeasonMonths();
-}
-
-const _origMountGuard = mountGuard;
-function mountGuard(first, last){
-  _origMountGuard(first, last);
-  updateLastSeen();
-  startAvailMapListener();
-}
-
-// Wire settings screen
-const _origMNav = mNav;
-function mNav(screen, btn){
-  _origMNav(screen, btn);
-  if(screen==='settings'){
-    renderSeasonMonthChips();
-    renderCustomTypesList();
-    const lp=el('last-payout-date');
-    if(lp&&DATA.config?.lastPayoutDate) lp.value=DATA.config.lastPayoutDate;
-  }
-}
-
-// Wire guard timeoff to render avail cal
-const _origGNav = gNav;
-function gNav(screen, btn){
-  _origGNav(screen, btn);
-  if(screen==='timeoff') renderGuardAvailCal();
-}
-
-// Wire payroll screen to show adj button
-// Override renderPayroll to add adjust button
-const _origRenderPayroll = renderPayroll;
-function renderPayroll(){
-  _origRenderPayroll();
-  // Add adjust buttons after table renders
-  setTimeout(()=>{
-    const wrap=el('payroll-table-wrap'); if(!wrap) return;
-    const adjSection=document.createElement('div');
-    adjSection.style.marginTop='.7rem';
-    adjSection.innerHTML=`<button class="btn btn-yellow" onclick="openHourAdjustment(null)" style="width:100%;margin-top:0">⏱ Manually Adjust Guard Hours</button>`;
-    if(!wrap.nextElementSibling?.querySelector('.btn-yellow')){
-      wrap.parentNode.insertBefore(adjSection, wrap.nextSibling);
-    }
-  },100);
-}
-
-// Also add adj button to profile modal
-const _origOpenProfile = openProfile;
-function openProfile(guardId){
-  _origOpenProfile(guardId);
-  // Add adjust hours button to profile
-  setTimeout(()=>{
-    const closeBtn=document.querySelector('#ov-profile .btn-ghost');
-    if(closeBtn && !document.getElementById('prof-adj-btn')){
-      const adjBtn=document.createElement('button');
-      adjBtn.id='prof-adj-btn';
-      adjBtn.className='adj-btn';
-      adjBtn.style.width='100%';
-      adjBtn.textContent='⏱ Adjust Hours';
-      adjBtn.onclick=()=>{ closeProfile(); openHourAdjustment(guardId); };
-      closeBtn.parentNode.insertBefore(adjBtn, closeBtn);
-    }
-  },50);
-}
-
-// Update last-seen on guard login
-async function updateLastSeen(){
-  if(L.user?.id && L.user.role==='guard'){
-    await dbRef(`guards/${L.user.id}/lastSeen`).set(new Date().toISOString()).catch(()=>{});
-  }
-}
-
-
-// ============================================================
-// EDIT GUARD CODE
-// ============================================================
-function openEditCode(guardId){
-  const g=(DATA.guards||{})[guardId]; if(!g) return;
-  const nameEl=el('editcode-name'); if(nameEl) nameEl.textContent=`${g.first} ${g.last}`;
-  setVal('editcode-val', g.personalCode||'');
-  setVal('editcode-guard-id', guardId);
-  const shared=el('editcode-shared');
-  if(shared) shared.textContent=DATA.config?.guardCode||'(not set)';
-  openOv('ov-editcode');
-}
-async function saveGuardCode(){
-  const guardId=getVal('editcode-guard-id');
-  const code=getVal('editcode-val').trim();
-  if(code && !/^\d{4}$/.test(code)){ toast('Code must be exactly 4 digits','err'); return; }
-  await dbRef(`guards/${guardId}/personalCode`).set(code||null);
-  const g=(DATA.guards||{})[guardId];
-  logEvent('guard_added','Manager',`Code updated for ${g?g.first+' '+g.last:'guard'}: ${code?'personal code set':'using shared code'}`,{});
-  closeOv('ov-editcode');
-  toast(code?'Personal code set!':'Guard will use shared code');
-}
-
-// ============================================================
-// CUSTOM SHIFT TYPES
-// ============================================================
-function getShiftTypeKey(sh){
-  if(['regular','party','swim'].includes(sh.type)) return sh.type;
-  const idx=CUSTOM_TYPES.indexOf(sh.type);
-  return idx>=0?`ctype-${idx%6}`:'custom';
-}
+// ── CUSTOM SHIFT TYPES ────────────────────────────────────────
 function getShiftTypeBadgeClass(sh){
   if(sh.type==='regular') return 'tb-regular';
   if(sh.type==='party')   return 'tb-party';
@@ -2924,117 +1395,160 @@ function getCalDotClass(sh){
 }
 function rebuildShiftTypeDropdown(){
   const sel=el('sh-type'); if(!sel) return;
-  const core=[{val:'regular',label:'Regular Shift'},{val:'party',label:'Party'},{val:'swim',label:'Swim Meet'}];
-  sel.innerHTML=core.map(o=>`<option value="${o.val}">${o.label}</option>`).join('')
+  sel.innerHTML=[{val:'regular',label:'Regular Shift'},{val:'party',label:'Party'},{val:'swim',label:'Swim Meet'}].map(o=>`<option value="${o.val}">${o.label}</option>`).join('')
     +CUSTOM_TYPES.map(t=>`<option value="${t}">${t}</option>`).join('')
     +`<option value="custom">Custom (one-off)…</option>`;
 }
 async function addCustomType(){
   const name=getVal('new-custom-type').trim();
-  if(!name){toast('Enter a type name','err');return;}
-  if(CUSTOM_TYPES.includes(name)){toast('Type already exists','warn');return;}
+  if(!name){ toast('Enter a type name','err'); return; }
+  if(CUSTOM_TYPES.includes(name)){ toast('Already exists','warn'); return; }
   CUSTOM_TYPES.push(name);
-  await dbRef('customTypes').set(CUSTOM_TYPES);
+  await dbSet('customTypes',CUSTOM_TYPES);
   setVal('new-custom-type','');
   renderCustomTypesList(); rebuildShiftTypeDropdown();
-  toast(`"${name}" added to shift types!`);
+  toast(`"${name}" added!`);
 }
 async function removeCustomType(name){
   CUSTOM_TYPES=CUSTOM_TYPES.filter(t=>t!==name);
-  await dbRef('customTypes').set(CUSTOM_TYPES.length?CUSTOM_TYPES:null);
+  await dbSet('customTypes',CUSTOM_TYPES.length?CUSTOM_TYPES:null);
   renderCustomTypesList(); rebuildShiftTypeDropdown();
-  toast('Shift type removed');
+  toast('Removed');
 }
 function renderCustomTypesList(){
-  const el2=el('custom-types-list'); if(!el2) return;
-  if(!CUSTOM_TYPES.length){el2.innerHTML='<p class="empty" style="margin-bottom:0;">No custom types yet.</p>';return;}
-  el2.innerHTML=CUSTOM_TYPES.map((t,i)=>`
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:.4rem 0;border-bottom:1px solid var(--border);">
-      <span class="type-badge tb-ctype-${i%6}">${t}</span>
-      <button class="btn btn-sm btn-danger" onclick="removeCustomType('${t}')">Remove</button>
-    </div>`).join('');
+  const e=el('custom-types-list'); if(!e) return;
+  e.innerHTML=CUSTOM_TYPES.length?CUSTOM_TYPES.map((t,i)=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:.4rem 0;border-bottom:1px solid var(--border);"><span class="type-badge tb-ctype-${i%6}">${t}</span><button class="btn btn-sm btn-danger" onclick="removeCustomType('${t}')">Remove</button></div>`).join(''):'<p class="empty" style="margin:0">No custom types yet.</p>';
 }
 async function loadCustomTypes(){
-  try{ const snap=await dbRef('customTypes').get(); CUSTOM_TYPES=snap&&snap.exists()?snap.val():[]; if(!Array.isArray(CUSTOM_TYPES)) CUSTOM_TYPES=[]; }catch(e){ CUSTOM_TYPES=[]; }
+  try{ const s=await dbGet('customTypes'); CUSTOM_TYPES=Array.isArray(s)?s:[]; }catch(e){ CUSTOM_TYPES=[]; }
   rebuildShiftTypeDropdown();
 }
 
-// ============================================================
-// SEASON MONTHS
-// ============================================================
-const ALL_MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+// ── SEASON MONTHS ─────────────────────────────────────────────
 const CORE_MONTHS=[5,6,7];
 function renderSeasonMonthChips(){
   const c=el('season-month-chips'); if(!c) return;
-  const options=[3,4,5,6,7,8,9,10];
-  c.innerHTML=options.map(m=>{
-    const isCore=CORE_MONTHS.includes(m), isOn=SEASON.includes(m);
-    return`<div class="chip${isOn?' on':''}" onclick="${isCore?'':` toggleSeasonMonth(${m},this)`}" title="${isCore?'Always included':'Click to toggle'}">${ALL_MONTHS[m]}${isCore?' 🔒':''}</div>`;
+  c.innerHTML=[3,4,5,6,7,8,9,10].map(m=>{
+    const isCore=CORE_MONTHS.includes(m),isOn=SEASON.includes(m);
+    return`<div class="chip${isOn?' on':''}" ${isCore?'':`onclick="toggleSeasonMonth(${m},this)"`} title="${isCore?'Always included':'Click to toggle'}">${MONTHS[m]}${isCore?' 🔒':''}</div>`;
   }).join('');
 }
-function toggleSeasonMonth(month,chip){
-  if(SEASON.includes(month)){ if(SEASON.length<=1){toast('Need at least one month','err');return;} SEASON=SEASON.filter(m=>m!==month); }
-  else { SEASON=[...SEASON,month].sort((a,b)=>a-b); }
-  chip.classList.toggle('on',SEASON.includes(month));
+function toggleSeasonMonth(m,chip){
+  if(SEASON.includes(m)){ if(SEASON.length<=1){toast('Need at least one month','err');return;} SEASON=SEASON.filter(x=>x!==m); }
+  else{ SEASON=[...SEASON,m].sort((a,b)=>a-b); }
+  chip.classList.toggle('on',SEASON.includes(m));
 }
-async function saveSeasonMonths(){
-  await dbRef('config/seasonMonths').set(SEASON);
-  refreshCals(); toast('Season months saved!');
-}
+async function saveSeasonMonths(){ await dbUpdate('config',{seasonMonths:SEASON}); refreshCals(); toast('Season months saved!'); }
 async function loadSeasonMonths(){
-  try{ const snap=await dbRef('config/seasonMonths').get(); if(snap&&snap.exists()){ const s=snap.val(); if(Array.isArray(s)&&s.length) SEASON=s; } }catch(e){}
+  try{ const s=await dbGet('config/seasonMonths'); if(Array.isArray(s)&&s.length) SEASON=s; }catch(e){}
 }
 
-// ============================================================
-// GUARD AVAILABILITY ON CALENDAR
-// ============================================================
-function renderGuardAvailCal(){
-  const c=el('g-avail-cal'); if(!c) return;
-  c.innerHTML=SEASON.map(m=>buildAvailMonth(2026,m)).join('');
-}
-function buildAvailMonth(year,month){
+// ── CALENDAR ──────────────────────────────────────────────────
+function renderGuardCal(){ const c=el('g-season-cal'); if(c) c.innerHTML=SEASON.map(m=>buildMonth(2026,m,false)).join(''); }
+function renderMgrCal(){   const c=el('m-season-cal'); if(c) c.innerHTML=SEASON.map(m=>buildMonth(2026,m,true)).join(''); }
+function refreshCals(){ renderGuardCal(); renderMgrCal(); }
+
+function buildMonth(year,month,isMgr){
   const first=new Date(year,month,1).getDay();
   const days=new Date(year,month+1,0).getDate();
-  const todayDS=toDS(new Date());
+  const today=new Date();
   let cells='';
   for(let i=0;i<first;i++) cells+=`<div class="cal-cell blank"></div>`;
   for(let d=1;d<=days;d++){
     const ds=`${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const key=`${L.user?.id}_${ds}`;
-    const isAvail=(DATA.availMap||{})[key];
-    const isPast=ds<todayDS;
-    let cls='cal-cell'+(isAvail?' selected':'');
-    cells+=`<div class="${cls}" onclick="${isPast?'':(`toggleGuardAvail('${ds}',this)`)}" style="${isPast?'cursor:default;opacity:.4;':''}">${d}${isAvail?'<span style="display:block;font-size:.4rem;color:var(--green)">✓avail</span>':''}</div>`;
+    const dayShifts=shiftsList().filter(s=>s.date===ds);
+    const isToday=today.getDate()===d&&today.getMonth()===month&&today.getFullYear()===year;
+    const isSel=L.selectedDay===ds, isCopied=L.copiedDay===ds;
+    const hasShift=dayShifts.length>0;
+    const under=dayShifts.some(s=>(s.assigned||[]).length<s.required);
+    let typeClass='';
+    if(dayShifts.length===1) typeClass=' '+getCalDotClass(dayShifts[0]);
+    else if(dayShifts.length>1) typeClass=' multi-type';
+    const cls='cal-cell'+(isToday?' today':'')+(isSel?' selected':'')+(hasShift?' has-shift'+typeClass:'')+(under?' understaffed':'')+(isCopied?' copied-day':'');
+    cells+=`<div class="${cls}" onclick="openDayPopup('${ds}',${isMgr})">${d}</div>`;
   }
-  return`<div class="cal-month" style="margin-bottom:1.2rem;"><div class="cal-month-name">${ALL_MONTHS[month]}</div><div class="cal-grid">${[...Array(7)].map((_,i)=>`<div class="cal-hdr">${['Su','Mo','Tu','We','Th','Fr','Sa'][i]}</div>`).join('')}${cells}</div></div>`;
-}
-async function toggleGuardAvail(ds,cellEl){
-  if(!L.user?.id) return;
-  const key=`${L.user.id}_${ds}`;
-  if(!DATA.availMap) DATA.availMap={};
-  const isNowAvail=!DATA.availMap[key];
-  if(isNowAvail){
-    DATA.availMap[key]={guardId:L.user.id,date:ds,availableAt:new Date().toISOString()};
-    await dbRef(`availability/${key}`).set(DATA.availMap[key]);
-    cellEl.classList.add('selected'); toast(`Available ${ds}`);
-  } else {
-    delete DATA.availMap[key];
-    await dbRef(`availability/${key}`).remove();
-    cellEl.classList.remove('selected'); toast('Availability removed');
-  }
-}
-function startAvailMapListener(){
-  if(!DATA.availMap) DATA.availMap={};
-  dbRef('availability').on('value',snap=>{
-    DATA.availMap=snap&&snap.exists()?snap.val():{};
-    renderGuardAvailCal(); renderMgrAvailList();
-  });
-  L.unsubscribers.push(()=>dbRef('availability').off('value'));
+  return`<div class="cal-month"><div class="cal-month-name">${MONTHS[month].toUpperCase()} ${year}</div><div class="cal-grid">${DAY_HDRS.map(h=>`<div class="cal-hdr">${h}</div>`).join('')}${cells}</div></div>`;
 }
 
-// ============================================================
-// ASSIGN CHIPS — caution for time-off guards
-// ============================================================
+// ── DAY POPUP ─────────────────────────────────────────────────
+function openDayPopup(ds,isMgr){
+  L.selectedDay=ds; refreshCals();
+  const shifts=shiftsList().filter(s=>s.date===ds);
+  setText('ov-day-title',fmtLong(ds));
+  setHTML('ov-day-body',shifts.length?shifts.map(sh=>shiftCardHTML(sh,isMgr)).join(''):'<p class="empty">No shifts scheduled.</p>');
+  const mb=el('ov-day-mgr-btns'); if(mb) mb.style.display=isMgr?'block':'none';
+  if(isMgr){
+    const pb=el('paste-day-btn');
+    if(pb){ pb.style.display=L.copiedDay?'inline-block':'none'; if(L.copiedDay) pb.textContent=`📌 Paste from ${fmtShort(L.copiedDay)}`; }
+    // Show available guards for this day
+    const avail=Object.values(DATA.availMap||{}).filter(e=>e.date===ds);
+    if(avail.length){
+      const names=avail.map(e=>gName(e.guardId)).join(', ');
+      const availDiv=document.createElement('div');
+      availDiv.className='info-box'; availDiv.style.marginTop='.6rem';
+      availDiv.textContent=`🙋 Available to cover: ${names}`;
+      el('ov-day-body').appendChild(availDiv);
+    }
+  }
+  openOv('ov-day');
+}
+
+function shiftCardHTML(sh,isMgr){
+  const names=(sh.assigned||[]).map(id=>gName(id)).join(', ');
+  const under=(sh.assigned||[]).length<sh.required;
+  const tLabel=sh.type==='custom'?sh.customType:(TYPE_LABELS[sh.type]||sh.type);
+  const tCls=getShiftTypeBadgeClass(sh);
+  let h=`<div class="shift-card${sh.type==='party'?' party-card':sh.type==='swim'?' swim-card':under?' under-card':''}">
+    <span class="type-badge ${tCls}">${tLabel}</span>
+    <div class="s-time">${fmt12(sh.start)} – ${fmt12(sh.end)}</div>
+    <div class="s-guards">${names||'No one assigned'} (${(sh.assigned||[]).length}/${sh.required})</div>`;
+  if(sh.arriveTime) h+=`<div class="s-note" style="color:var(--yellow)">⏰ Arrive by ${fmt12(sh.arriveTime)}</div>`;
+  if(sh.note) h+=`<div class="s-note">📝 ${sh.note}</div>`;
+  if(under) h+=`<div class="s-warn">⚠️ Needs ${sh.required-(sh.assigned||[]).length} more guard${sh.required-(sh.assigned||[]).length>1?'s':''}</div>`;
+  if(isMgr) h+=`<div class="s-actions"><button class="btn btn-sm btn-ghost" onclick="editShift('${sh.id}')">✏️ Edit</button><button class="btn btn-sm btn-danger" onclick="delShift('${sh.id}')">🗑 Delete</button></div>`;
+  return h+'</div>';
+}
+
+function copyDay(){ L.copiedDay=L.selectedDay; toast(`Copied ${fmtShort(L.selectedDay)} — open another day to paste`,'warn'); closeOv('ov-day'); }
+async function pasteDay(){
+  if(!L.copiedDay||!L.selectedDay) return;
+  const src=shiftsList().filter(s=>s.date===L.copiedDay);
+  if(!src.length){ toast('No shifts to paste','err'); return; }
+  let added=0;
+  for(const sh of src){
+    if(!shiftsList().find(s=>s.date===L.selectedDay&&s.start===sh.start)){
+      const id=newKey(); await dbSet(`shifts/${id}`,{...sh,id,date:L.selectedDay,assigned:[]}); added++;
+    }
+  }
+  openDayPopup(L.selectedDay,true); toast(`Pasted ${added} shift(s)`);
+}
+
+// ── SHIFT CRUD ────────────────────────────────────────────────
+function openAddShiftFromDay(){ openAddShift(L.selectedDay); closeOv('ov-day'); }
+function openAddShift(date){
+  setText('ov-shift-title','ADD SHIFT');
+  setVal('sh-date',date||''); setVal('sh-start','14:00'); setVal('sh-end','20:00'); setVal('sh-arrive','');
+  setVal('sh-type','regular'); setVal('sh-custom',''); setVal('sh-req','2'); setVal('sh-note','');
+  setCheck('sh-repeat',false); hide('sh-repeat-days'); setVal('sh-edit-id','');
+  const cw=el('sh-custom-wrap'); if(cw) cw.style.display='none';
+  buildAssignChips([]); hide('sh-to-warn');
+  openOv('ov-shift');
+}
+function editShift(id){
+  const sh=(DATA.shifts||{})[id]; if(!sh) return;
+  setText('ov-shift-title','EDIT SHIFT');
+  setVal('sh-date',sh.date); setVal('sh-start',sh.start); setVal('sh-end',sh.end); setVal('sh-arrive',sh.arriveTime||'');
+  setVal('sh-type',sh.type); setVal('sh-custom',sh.customType||''); setVal('sh-req',String(sh.required)); setVal('sh-note',sh.note||'');
+  setCheck('sh-repeat',false); hide('sh-repeat-days'); setVal('sh-edit-id',id);
+  const cw=el('sh-custom-wrap'); if(cw) cw.style.display=sh.type==='custom'?'block':'none';
+  buildAssignChips(sh.assigned||[]); hide('sh-to-warn');
+  closeOv('ov-day'); openOv('ov-shift');
+}
+function onTypeChange(){
+  const t=getVal('sh-type');
+  const cw=el('sh-custom-wrap'); if(cw) cw.style.display=t==='custom'?'block':'none';
+  if(TYPE_REQ[t]) setVal('sh-req',String(TYPE_REQ[t]));
+}
 function buildAssignChips(current){
   L.assignChipSelected=[...current];
   const c=el('sh-assign-chips'); if(!c) return;
@@ -3042,13 +1556,801 @@ function buildAssignChips(current){
   c.innerHTML=guardsList().map(g=>{
     const on=L.assignChipSelected.includes(g.id);
     const hasTO=!!(date&&isTO(g.id,date));
-    return`<div class="chip${on?' on':''}${hasTO?' caution':''}" onclick="toggleAssignChip('${g.id}',this)" title="${hasTO?g.first+' has approved time off':''}">` +
-      `${g.first} ${g.last}${g.type==='backup'?' ⭐':''}${hasTO?' ⚠️':''}</div>`;
+    return`<div class="chip${on?' on':''}${hasTO?' caution':''}" onclick="toggleAssignChip('${g.id}',this)" title="${hasTO?g.first+' has approved time off this day':''}">${g.first} ${g.last}${g.type==='backup'?' ⭐':''}${hasTO?' ⚠️':''}</div>`;
+  }).join('');
+}
+function toggleAssignChip(id,chipEl){
+  const date=getVal('sh-date');
+  const idx=L.assignChipSelected.indexOf(id);
+  if(idx>=0){ L.assignChipSelected.splice(idx,1); chipEl.classList.remove('on'); }
+  else {
+    if(date&&isTO(id,date)){ const w=el('sh-to-warn'); if(w){w.textContent=`⚠️ ${gName(id)} has approved time off on ${fmtShort(date)}. Schedule anyway?`;w.style.display='block';} }
+    L.assignChipSelected.push(id); chipEl.classList.add('on');
+  }
+  if(!L.assignChipSelected.some(gid=>date&&isTO(gid,date))) hide('sh-to-warn');
+}
+function toggleRepeatDays(){ const p=el('sh-repeat-days'); if(p) p.style.display=getCheck('sh-repeat')?'block':'none'; }
+function toggleRepeatDay(chip){ chip.classList.toggle('on'); }
+
+async function saveShift(){
+  const date=getVal('sh-date'),start=getVal('sh-start'),end=getVal('sh-end'),arriveTime=getVal('sh-arrive');
+  const type=getVal('sh-type'),customType=getVal('sh-custom').trim(),required=parseInt(getVal('sh-req')),note=getVal('sh-note').trim();
+  const repeat=getCheck('sh-repeat'),editId=getVal('sh-edit-id');
+  if(!date||!start||!end){ toast('Fill in date and times','err'); return; }
+  if(end<=start){ toast('End must be after start','err'); return; }
+  if(type==='custom'&&!customType){ toast('Enter a custom type name','err'); return; }
+  const shData={date,start,end,arriveTime,type,customType,required,note,assigned:L.assignChipSelected};
+  const typeLabel=type==='custom'?customType:(CUSTOM_TYPES.includes(type)?type:(TYPE_LABELS[type]||type));
+  if(editId){
+    await dbUpdate(`shifts/${editId}`,shData);
+    logEvent('shift_edited','Manager',`Shift edited: ${date} ${fmt12(start)}–${fmt12(end)}`,{});
+    toast('Shift updated!');
+  } else if(repeat){
+    const dayChips=document.querySelectorAll('#sh-repeat-days [data-day]');
+    const activeDays=new Set([...dayChips].filter(c=>c.classList.contains('on')).map(c=>parseInt(c.dataset.day)));
+    if(!activeDays.size){ toast('Select repeat days','err'); return; }
+    const endDate=new Date('2026-08-31'); let cur=new Date(date); let added=0;
+    while(cur<=endDate){
+      if(activeDays.has(cur.getDay())){
+        const ds=cur.toISOString().slice(0,10);
+        if(!shiftsList().find(s=>s.date===ds&&s.start===start)){
+          const id=newKey(); await dbSet(`shifts/${id}`,{...shData,id,date:ds,assigned:[]}); added++;
+        }
+      }
+      cur.setDate(cur.getDate()+1);
+    }
+    logEvent('shift_added','Manager',`${added} repeat ${typeLabel} shifts created`,{});
+    toast(`${added} shifts created!`);
+  } else {
+    const id=newKey(); await dbSet(`shifts/${id}`,{...shData,id});
+    logEvent('shift_added','Manager',`Shift added: ${typeLabel} on ${date}, ${fmt12(start)}–${fmt12(end)}${arriveTime?' (arrive '+fmt12(arriveTime)+')':''}`,{});
+    toast('Shift added!');
+  }
+  closeOv('ov-shift');
+}
+
+async function delShift(id){
+  const sh=(DATA.shifts||{})[id];
+  confirmAction('DELETE SHIFT','This shift will be permanently removed.','Delete',async()=>{
+    await dbRemove(`shifts/${id}`);
+    logEvent('shift_deleted','Manager',`Shift deleted: ${sh?sh.date+' '+fmt12(sh.start)+'–'+fmt12(sh.end):''}`,{});
+    closeOv('ov-day'); toast('Shift deleted');
+  });
+}
+
+// ── EXCEL IMPORT ──────────────────────────────────────────────
+function openExcelImport(){ openOv('ov-excel'); }
+async function handleExcelUpload(evt){
+  const file=evt.target.files[0]; if(!file) return;
+  if(!window.XLSX){ await new Promise((res,rej)=>{ const s=document.createElement('script'); s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'; s.onload=res; s.onerror=rej; document.head.appendChild(s); }); }
+  const buf=await file.arrayBuffer();
+  const wb=window.XLSX.read(buf,{type:'array'});
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  const rows=window.XLSX.utils.sheet_to_json(ws,{raw:false});
+  let added=0,errors=[];
+  for(const row of rows){
+    const date=(row['Date']||'').trim(),start=(row['Start']||'').trim(),end=(row['End']||'').trim();
+    if(!date||!start||!end){ errors.push('Row missing date/start/end'); continue; }
+    if(end<=start){ errors.push(`${date}: end before start`); continue; }
+    const type=(row['Type']||'regular').trim().toLowerCase();
+    const required=parseInt(row['Guards Required']||'2');
+    const arriveTime=(row['Arrive By']||'').trim();
+    const note=(row['Notes']||'').trim();
+    const mappedType=type.includes('party')?'party':type.includes('swim')?'swim':'regular';
+    const id=newKey();
+    await dbSet(`shifts/${id}`,{id,date,start,end,arriveTime,type:mappedType,customType:'',required:isNaN(required)?2:required,note,assigned:[]});
+    added++;
+  }
+  closeOv('ov-excel');
+  logEvent('shift_added','Manager',`${added} shifts imported from Excel`,{});
+  toast(added>0?`✓ ${added} shifts imported${errors.length?' ('+errors.length+' skipped)':''}`:' No valid shifts found','warn');
+}
+function downloadExcelTemplate(){
+  if(!window.XLSX){ const s=document.createElement('script'); s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'; s.onload=buildTemplate; document.head.appendChild(s); }
+  else buildTemplate();
+}
+function buildTemplate(){
+  const ws=window.XLSX.utils.aoa_to_sheet([['Date','Start','End','Type','Guards Required','Arrive By','Notes'],['2026-06-01','14:00','20:00','Regular','2','',''],['2026-06-02','13:00','19:00','Party','3','12:30','Birthday party'],['2026-06-03','10:00','14:00','Swim Meet','3','09:45','']]);
+  const wb=window.XLSX.utils.book_new(); window.XLSX.utils.book_append_sheet(wb,ws,'Shifts');
+  window.XLSX.writeFile(wb,'waveguard_shift_template.xlsx'); toast('Template downloaded!');
+}
+
+// ── AUTO SCHEDULE ─────────────────────────────────────────────
+function renderAutoChips(){
+  const c=el('auto-chips'); if(!c) return;
+  c.innerHTML=guardsList().map(g=>`<div class="chip${L.autoSelectedGuards.includes(g.id)?' on':''}" onclick="toggleAutoChip('${g.id}',this)">${g.first}${g.type==='backup'?' ⭐':''}</div>`).join('');
+}
+function toggleAutoChip(id,chip){ const i=L.autoSelectedGuards.indexOf(id); i>=0?L.autoSelectedGuards.splice(i,1):L.autoSelectedGuards.push(id); chip.classList.toggle('on',L.autoSelectedGuards.includes(id)); }
+function openAutoSchedule(){ renderAutoChips(); openOv('ov-auto'); }
+
+async function runAutoSchedule(){
+  const from=getVal('auto-from'),to=getVal('auto-to');
+  if(!from||!to){ toast('Set date range','err'); return; }
+  const prog=el('auto-prog'); if(prog) prog.style.display='block';
+  const runBtn=el('auto-run-btn'); if(runBtn) runBtn.disabled=true;
+  setTimeout(()=>{ const f=el('auto-fill'); if(f) f.style.width='100%'; },80);
+  const regular=guardsList().filter(g=>g.type==='regular');
+  const backup=guardsList().filter(g=>g.type==='backup');
+  const pool=L.autoSelectedGuards.length>0?guardsList().filter(g=>L.autoSelectedGuards.includes(g.id)):regular;
+  const counts={}; guardsList().forEach(g=>counts[g.id]=0);
+  const updates={};
+  for(const [sid,sh] of Object.entries(DATA.shifts||{})){
+    if(sh.date<from||sh.date>to) continue;
+    const assigned=[...(sh.assigned||[])];
+    if(assigned.length>=sh.required) continue;
+    const need=sh.required-assigned.length;
+    const avail=pool.filter(g=>!assigned.includes(g.id)&&!isTO(g.id,sh.date)).sort((a,b)=>(counts[a.id]||0)-(counts[b.id]||0));
+    let filled=0;
+    for(const g of avail){ if(filled>=need) break; assigned.push(g.id); counts[g.id]=(counts[g.id]||0)+1; filled++; }
+    if(assigned.length<sh.required){
+      const bk=backup.filter(g=>!assigned.includes(g.id)&&!isTO(g.id,sh.date)).sort((a,b)=>(counts[a.id]||0)-(counts[b.id]||0));
+      for(const g of bk){ if(assigned.length>=sh.required) break; assigned.push(g.id); counts[g.id]=(counts[g.id]||0)+1; }
+    }
+    updates[`shifts/${sid}/assigned`]=assigned;
+  }
+  if(Object.keys(updates).length>0 && db) await db.ref(DB_ROOT).update(updates);
+  setTimeout(()=>{
+    if(prog) prog.style.display='none';
+    const f=el('auto-fill'); if(f) f.style.width='0';
+    if(runBtn) runBtn.disabled=false;
+    L.autoSelectedGuards=[];
+    logEvent('auto_schedule','Manager','Auto-schedule run',{});
+    toast('Season scheduled!');
+  },2300);
+  closeOv('ov-auto');
+}
+
+// ── COPY WEEK ─────────────────────────────────────────────────
+function openCopyWeek(){ openOv('ov-copyweek'); }
+async function doCopyWeek(){
+  const from=getVal('cw-from'),to=getVal('cw-to'),copyAssign=getCheck('cw-assign');
+  if(!from||!to){ toast('Set both dates','err'); return; }
+  const fSun=new Date(from+'T12:00:00'),tSun=new Date(to+'T12:00:00');
+  let added=0;
+  for(let off=0;off<7;off++){
+    const sd=new Date(fSun); sd.setDate(fSun.getDate()+off);
+    const td=new Date(tSun); td.setDate(tSun.getDate()+off);
+    const sds=sd.toISOString().slice(0,10),tds=td.toISOString().slice(0,10);
+    for(const sh of shiftsList().filter(s=>s.date===sds)){
+      if(!shiftsList().find(s=>s.date===tds&&s.start===sh.start)){
+        const id=newKey(); await dbSet(`shifts/${id}`,{...sh,id,date:tds,assigned:copyAssign?sh.assigned||[]:[]});added++;
+      }
+    }
+  }
+  closeOv('ov-copyweek'); toast(`Copied ${added} shifts`);
+}
+
+// ── WEEK AT A GLANCE ──────────────────────────────────────────
+let _weekStart=null;
+function openWeekGlance(){
+  if(!_weekStart) _weekStart=getMonday(new Date());
+  const minM=Math.min(...SEASON),maxM=Math.max(...SEASON);
+  const minDate=new Date(2026,minM,1),maxDate=new Date(2026,maxM+1,0);
+  if(_weekStart<getMonday(minDate)) _weekStart=getMonday(minDate);
+  if(_weekStart>maxDate) _weekStart=getMonday(maxDate);
+  renderWeekView(); openOv('ov-week');
+}
+function weekPrev(){
+  const prev=addDays(_weekStart,-7);
+  const minDate=new Date(2026,Math.min(...SEASON),1);
+  if(prev<getMonday(minDate)) return;
+  _weekStart=prev; renderWeekView();
+}
+function weekNext(){
+  const next=addDays(_weekStart,7);
+  const maxDate=new Date(2026,Math.max(...SEASON)+1,0);
+  if(next>maxDate) return;
+  _weekStart=next; renderWeekView();
+}
+function renderWeekView(){
+  const grid=el('week-grid'),statsL=el('week-stats-local'),statsG=el('week-stats-global');
+  if(!grid||!statsL||!statsG) return;
+  const weekDays=[]; for(let i=0;i<7;i++) weekDays.push(addDays(_weekStart,i));
+  const today=toDS(new Date()),allShifts=shiftsList(),guards=guardsList();
+  const minDate=new Date(2026,Math.min(...SEASON),1),maxDate=new Date(2026,Math.max(...SEASON)+1,0);
+  setText('week-label',`${weekDays[0].toLocaleDateString('en-US',{month:'short',day:'numeric'})} – ${weekDays[6].toLocaleDateString('en-US',{month:'short',day:'numeric'})}`);
+  const DAY_S=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  grid.innerHTML=weekDays.map((d,i)=>{
+    const ds=toDS(d),inSeason=d>=minDate&&d<=maxDate;
+    const dayShifts=inSeason?allShifts.filter(s=>s.date===ds):[];
+    const isToday=ds===today;
+    const inner=dayShifts.length?dayShifts.map(sh=>{
+      const under=(sh.assigned||[]).length<sh.required;
+      const cls=under?'week-shift ws-under':`week-shift ws-${sh.type==='custom'?'custom':sh.type}`;
+      const names=(sh.assigned||[]).map(id=>{const g=(DATA.guards||{})[id];return g?g.first:'?';}).join(', ');
+      return`<div class="${cls}">${fmt12(sh.start)}-${fmt12(sh.end)}<br><span style="font-size:.55rem">${names||'—'}</span>${under?' ⚠️':''}</div>`;
+    }).join(''):'<div class="week-empty">—</div>';
+    return`<div class="week-day${isToday?' today-col':''}"><div class="week-day-hdr">${DAY_S[i]}</div><div class="week-day-date">${d.getDate()}</div>${inner}</div>`;
+  }).join('');
+  // This week stats
+  const weekDSs=weekDays.map(toDS);
+  const weekShifts=allShifts.filter(s=>weekDSs.includes(s.date));
+  const lc={}; guards.forEach(g=>lc[g.id]=0);
+  weekShifts.forEach(sh=>(sh.assigned||[]).forEach(id=>{if(lc[id]!==undefined)lc[id]++;}));
+  const under=weekShifts.filter(s=>(s.assigned||[]).length<s.required).length;
+  const reg=guards.filter(g=>g.type==='regular').sort((a,b)=>(lc[b.id]||0)-(lc[a.id]||0));
+  const lMax=Math.max(...reg.map(g=>lc[g.id]||0),1);
+  let lHTML=reg.map(g=>{const cnt=lc[g.id]||0,pct=Math.round(cnt/lMax*100);return`<div class="stat-row"><div class="stat-name">${g.first} ${g.last}</div><div class="stat-bar-wrap"><div class="stat-bar" style="width:${pct}%"></div></div><div class="stat-count">${cnt}</div></div>`;}).join('');
+  if(under) lHTML=`<div class="discrepancy-box disc-bad" style="margin-bottom:.5rem;">⚠️ ${under} shift${under>1?'s are':' is'} understaffed this week.</div>`+lHTML;
+  if(!weekShifts.length) lHTML='<p class="empty">No shifts this week.</p>';
+  statsL.innerHTML=lHTML;
+  // Season stats
+  const sc={}; guards.forEach(g=>sc[g.id]=0);
+  allShifts.forEach(sh=>(sh.assigned||[]).forEach(id=>{if(sc[id]!==undefined)sc[id]++;}));
+  const sortedSeason=[...reg].sort((a,b)=>(sc[b.id]||0)-(sc[a.id]||0));
+  const sMax=Math.max(...sortedSeason.map(g=>sc[g.id]||0),1);
+  const sMin=Math.min(...sortedSeason.filter(g=>sc[g.id]>0).map(g=>sc[g.id]),0);
+  const gap=sMax-sMin;
+  let disc='',discCls='disc-ok';
+  if(sMax===0){disc='No shifts assigned yet.';discCls='disc-warn';}
+  else if(gap<=2){disc=`Shifts are evenly distributed — the biggest difference between any two guards is ${gap} shift${gap!==1?'s':''}.`;}
+  else if(gap<=5){disc=`${sortedSeason[0]?.first} has the most shifts (${sMax}) and ${sortedSeason[sortedSeason.length-1]?.first} has the fewest (${sMin}). A ${gap}-shift gap — slightly uneven but manageable.`;discCls='disc-warn';}
+  else{disc=`${sortedSeason[0]?.first} has ${sMax} shifts while ${sortedSeason[sortedSeason.length-1]?.first} only has ${sMin} — a significant ${gap}-shift imbalance. Run Auto-Schedule again or reassign some shifts.`;discCls='disc-bad';}
+  let gHTML=`<div class="discrepancy-box ${discCls}">${disc}</div>`;
+  gHTML+=sortedSeason.map(g=>{const cnt=sc[g.id]||0,pct=Math.round(cnt/sMax*100),isLeast=cnt===sMin&&gap>3;return`<div class="stat-row"><div class="stat-name">${g.first} ${g.last}</div><div class="stat-bar-wrap"><div class="stat-bar${isLeast?' warn-bar':''}" style="width:${pct}%"></div></div><div class="stat-count${isLeast?' stat-warn':''}">${cnt} shift${cnt!==1?'s':''}</div></div>`;}).join('');
+  const bk=guards.filter(g=>g.type==='backup');
+  if(bk.length){ gHTML+=`<div class="card-title" style="margin-top:.6rem;font-size:.55rem;">BACKUP GUARDS</div>`+bk.map(g=>{const cnt=sc[g.id]||0;return`<div class="stat-row"><div class="stat-name">${g.first} ⭐</div><div class="stat-bar-wrap"><div class="stat-bar" style="width:${cnt>0?Math.round(cnt/sMax*100):3}%"></div></div><div class="stat-count">${cnt}</div></div>`;}).join(''); }
+  statsG.innerHTML=gHTML;
+}
+
+// ── NEXT SHIFT ────────────────────────────────────────────────
+function renderNextShift(){
+  const nDate=el('g-next-date'),nTime=el('g-next-time'); if(!nDate||!nTime) return;
+  const today=toDS(new Date());
+  const up=shiftsList().filter(s=>s.date>=today&&(s.assigned||[]).includes(L.user?.id)).sort((a,b)=>a.date.localeCompare(b.date))[0];
+  nDate.textContent=up?fmtShort(up.date):'No upcoming shifts';
+  nTime.textContent=up?`${fmt12(up.start)} – ${fmt12(up.end)}`+(up.arriveTime?` · Arrive by ${fmt12(up.arriveTime)}`):'';
+}
+
+// ── CLOCK IN/OUT ──────────────────────────────────────────────
+function clockIn(){
+  if(L.clockedIn) return;
+  L.clockedIn=true; L.clockInTime=new Date();
+  hide('g-btn-ci'); show('g-btn-co');
+  const sb=el('g-clock-status'); if(sb) sb.className='status-bar sb-in';
+  const txt=el('g-clock-txt'); if(txt) txt.textContent=`Clocked in at ${L.clockInTime.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`;
+  const dot=sb?.querySelector('.dot'); if(dot) dot.classList.add('pulse');
+  if(L.user) logEvent('clock_in',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} clocked in`,{});
+  toast('Clocked in ✓');
+}
+async function clockOut(){
+  if(!L.clockedIn) return;
+  const out=new Date(),hrs=parseFloat(((out-L.clockInTime)/3600000).toFixed(2));
+  const inStr=L.clockInTime.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  const outStr=out.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  const date=toDS(new Date());
+  await dbSet(`allTsLog/${newKey()}`,{guardId:L.user.id,date,in:inStr,out:outStr,hrs,isAdjustment:false});
+  L.clockedIn=false; L.clockInTime=null;
+  show('g-btn-ci'); hide('g-btn-co');
+  const sb=el('g-clock-status'); if(sb) sb.className='status-bar sb-out';
+  const txt=el('g-clock-txt'); if(txt) txt.textContent='Not clocked in';
+  const dot=sb?.querySelector('.dot'); if(dot) dot.classList.remove('pulse');
+  if(L.user) logEvent('clock_out',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} clocked out after ${hrs} hrs`,{hrs});
+  toast(`Clocked out — ${hrs} hrs logged`);
+}
+
+// ── TIMESHEET ─────────────────────────────────────────────────
+function renderTimesheet(){
+  const hrsEl=el('g-total-hrs'),payEl=el('g-pay-est'),logEl=el('g-ts-log');
+  if(!hrsEl||!payEl||!logEl) return;
+  const myLog=Object.values(DATA.allTsLog||{}).filter(e=>e.guardId===L.user?.id);
+  const total=myLog.reduce((s,r)=>s+(r.adjustment!==undefined?r.adjustment:r.hrs),0);
+  const rate=parseFloat(DATA.config?.hourlyRate)||15;
+  hrsEl.textContent=Math.max(0,total).toFixed(1);
+  payEl.textContent=`Est. $${(Math.max(0,total)*rate).toFixed(2)}`;
+  logEl.innerHTML=myLog.length?[...myLog].sort((a,b)=>b.date.localeCompare(a.date)).map(e=>{
+    const hrs=e.adjustment!==undefined?e.adjustment:e.hrs;
+    const sign=hrs>=0?'+':'';
+    const label=e.isAdjustment?`📝 ${e.description||'Manual adjustment'}`:`${e.in} → ${e.out}`;
+    return`<div class="ts-row"><div><div class="ts-date">${e.date}</div><div style="font-size:.71rem;color:var(--muted)">${label}</div></div><div class="ts-hrs" style="${hrs<0?'color:var(--coral)':''}">${e.isAdjustment?sign:''}${Math.abs(hrs).toFixed(2)} hrs</div></div>`;
+  }).join(''):'<p class="empty">No entries yet.</p>';
+}
+
+// ── SICK / CLOSURE ────────────────────────────────────────────
+function openSickModal(){
+  const today=toDS(new Date());
+  const mine=shiftsList().filter(s=>s.date===today&&(s.assigned||[]).includes(L.user?.id));
+  const sel=el('sick-sel'); if(!sel) return;
+  sel.innerHTML=mine.length?mine.map(s=>`<option value="${s.id}">Today ${fmt12(s.start)}–${fmt12(s.end)}</option>`).join(''):'<option>No shifts today</option>';
+  openOv('ov-sick');
+}
+async function confirmSick(){
+  const shiftId=getVal('sick-sel');
+  const shift=(DATA.shifts||{})[shiftId];
+  const actor=L.user?`${L.user.first} ${L.user.last}`:'?';
+  logEvent('sick_alert',actor,`${actor} called in sick${shift?' for '+fmt12(shift.start)+'–'+fmt12(shift.end)+' shift':''}`,{shiftId});
+  postGroupMe(`🚨 EMERGENCY COVERAGE NEEDED!\n${actor} can't make their shift${shift?' ('+fmt12(shift.start)+'–'+fmt12(shift.end)+')':''}.\nIf you can cover, accept in the WaveGuard app ASAP!`);
+  closeOv('ov-sick'); toast('🚨 Emergency alert sent!');
+}
+function openClosureModal(){ openOv('ov-closure'); }
+async function sendClosure(){
+  const reason=getVal('cl-reason').trim(),msg=getVal('cl-msg').trim();
+  const date=getVal('cl-date'),tS=getVal('cl-time-start'),tE=getVal('cl-time-end');
+  if(!reason){ toast('Enter a reason','err'); return; }
+  if(!date){ toast('Enter a date','err'); return; }
+  if(!tS||!tE||tE<=tS){ toast('Enter valid start and end times','err'); return; }
+  logEvent('closure_alert','Manager',`Pool closure: ${reason} on ${date} ${fmt12(tS)}–${fmt12(tE)}${msg?' — '+msg:''}`,{});
+  postGroupMe(`⚠️ POOL CLOSURE\n📅 ${date}\n🕐 ${fmt12(tS)} – ${fmt12(tE)}\n❗ ${reason}${msg?' — '+msg:''}`);
+  closeOv('ov-closure');
+  ['cl-reason','cl-msg','cl-date','cl-time-start','cl-time-end'].forEach(id=>setVal(id,''));
+  toast('⚠️ Pool closure alert sent!');
+}
+
+// ── SWAPS ─────────────────────────────────────────────────────
+function openSwapModal(mode){
+  L.swapMode=mode;
+  setText('ov-swap-title',mode==='swap'?'REQUEST SWAP':'GIVE SHIFT AWAY');
+  const today=toDS(new Date());
+  const myShifts=shiftsList().filter(s=>s.date>=today&&(s.assigned||[]).includes(L.user?.id));
+  const opts=myShifts.length?myShifts.map(s=>`<option value="${s.id}">${fmtShort(s.date)} · ${fmt12(s.start)}–${fmt12(s.end)}</option>`).join(''):'<option value="">No upcoming shifts</option>';
+  let html=`<div class="fg"><label>Shift to ${mode==='swap'?'Swap':'Give Away'}</label><select id="sw-myshift">${opts}</select></div>`;
+  if(mode==='swap'){
+    const others=guardsList().filter(g=>g.id!==L.user?.id);
+    html+=`<div class="fg"><label>Swap with</label><select id="sw-with">${others.map(g=>`<option value="${g.id}">${g.first} ${g.last}${g.type==='backup'?' ⭐':''}</option>`).join('')}</select></div><div class="info-box">They'll receive a notification and can accept or decline.</div>`;
+  } else {
+    const shiftId=myShifts[0]?.id,shift=shiftId?(DATA.shifts||{})[shiftId]:null;
+    const availNames=shift?Object.values(DATA.availMap||{}).filter(e=>e.date===shift.date).map(e=>gName(e.guardId)).filter(Boolean):[];
+    html+=availNames.length?`<div class="info-box">✓ Already available on this day: <strong>${availNames.join(', ')}</strong></div>`:`<div class="info-box">Broadcasts to all guards. First to accept gets your shift.</div>`;
+  }
+  html+=`<div class="fg"><label>Message (optional)</label><input type="text" id="sw-msg" placeholder="e.g. Doctor appointment"/></div>`;
+  setHTML('ov-swap-body',html);
+  const btn=el('swap-submit-btn'); if(btn) btn.textContent=mode==='swap'?'Send Swap Request':'Broadcast to All';
+  openOv('ov-swap');
+}
+async function sendSwapRequest(){
+  const shiftId=getVal('sw-myshift'),msg=getVal('sw-msg');
+  if(!shiftId){ toast('No shift selected','err'); return; }
+  const id=newKey();
+  if(L.swapMode==='swap'){
+    const toId=getVal('sw-with'); if(!toId){ toast('Select a guard','err'); return; }
+    await dbSet(`swaps/${id}`,{id,type:'swap',from:L.user.id,to:toId,shiftId,message:msg,status:'pending'});
+    logEvent('swap_request',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} requested a swap with ${gName(toId)}`,{});
+    toast('Swap request sent!');
+  } else {
+    await dbSet(`swaps/${id}`,{id,type:'give',from:L.user.id,to:null,shiftId,message:msg,status:'broadcast'});
+    const shift=(DATA.shifts||{})[shiftId];
+    const desc=shift?`${shift.date} ${fmt12(shift.start)}–${fmt12(shift.end)}`:'a shift';
+    logEvent('give_request',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} is giving away a shift`,{});
+    postGroupMe(`📢 SHIFT AVAILABLE!\n${L.user.first} ${L.user.last} is giving away:\n📅 ${desc}\nFirst to accept in WaveGuard gets it!`);
+    toast('Broadcast sent!');
+  }
+  closeOv('ov-swap');
+}
+function renderSwaps(){
+  const inEl=el('g-swaps-in'),outEl=el('g-swaps-out'); if(!inEl||!outEl) return;
+  const myId=L.user?.id;
+  const incoming=swapsList().filter(r=>(r.type==='give'&&r.status==='broadcast'&&r.from!==myId)||(r.to===myId&&r.status==='pending'));
+  const outgoing=swapsList().filter(r=>r.from===myId&&['pending','broadcast'].includes(r.status));
+  inEl.innerHTML=incoming.length?incoming.map(r=>swapCardHTML(r,'in')).join(''):'<p class="empty">No incoming requests.</p>';
+  outEl.innerHTML=outgoing.length?outgoing.map(r=>swapCardHTML(r,'out')).join(''):'<p class="empty">No outgoing requests.</p>';
+}
+function swapCardHTML(r,dir){
+  const fromG=(DATA.guards||{})[r.from];
+  const shift=(DATA.shifts||{})[r.shiftId];
+  const badge=r.type==='give'?`<span class="badge b-yellow">📢 Give Away</span>`:`<span class="badge b-blue">🔄 Swap</span>`;
+  let h=`<div class="swap-card">${badge}`;
+  if(dir==='in'){
+    h+=`<div class="sw-head">${r.type==='give'?(fromG?.first||'?')+' is giving away a shift':(fromG?.first||'?')+' wants to swap with you'}</div>`;
+    h+=`<div class="sw-detail">${shift?`${fmtShort(shift.date)} · ${fmt12(shift.start)}–${fmt12(shift.end)}`:'—'}</div>`;
+    if(r.message) h+=`<div class="sw-msg">"${r.message}"</div>`;
+    h+=`<div class="sw-actions">`;
+    h+=r.type==='give'?`<button class="btn btn-sm btn-green" onclick="acceptGive('${r.id}')">✓ Accept Shift</button>`:`<button class="btn btn-sm btn-green" onclick="acceptSwap('${r.id}')">✓ Accept Swap</button>`;
+    h+=`<button class="btn btn-sm btn-danger" onclick="declineSwap('${r.id}')">✕ Decline</button></div>`;
+  } else {
+    const toG=(DATA.guards||{})[r.to];
+    h+=`<div class="sw-head">${r.type==='give'?'You broadcast a give-away':`Swap request → ${toG?toG.first:'?'}`}</div>`;
+    h+=`<div class="sw-detail">${shift?`${fmtShort(shift.date)} · ${fmt12(shift.start)}–${fmt12(shift.end)}`:'—'}</div>`;
+    h+=`<span class="badge b-gray">${r.type==='give'?'📢 Broadcast':'⏳ Waiting'}</span>`;
+    h+=`<div class="sw-actions"><button class="btn btn-sm btn-danger" onclick="declineSwap('${r.id}')">Cancel</button></div>`;
+  }
+  return h+'</div>';
+}
+async function acceptGive(swapId){
+  const r=(DATA.swaps||{})[swapId]; if(!r) return;
+  const shift=(DATA.shifts||{})[r.shiftId];
+  if(shift){ const a=[...(shift.assigned||[])].filter(id=>id!==r.from); if(!a.includes(L.user.id)) a.push(L.user.id); await dbUpdate(`shifts/${r.shiftId}`,{assigned:a}); }
+  await dbUpdate(`swaps/${swapId}`,{status:'completed'});
+  for(const [sid,s] of Object.entries(DATA.swaps||{})){ if(s.type==='give'&&s.shiftId===r.shiftId&&sid!==swapId&&s.status==='broadcast') await dbUpdate(`swaps/${sid}`,{status:'cancelled'}); }
+  logEvent('give_accepted',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} accepted a shift from ${gName(r.from)}`,{});
+  toast('Shift accepted! ✓');
+}
+async function acceptSwap(swapId){
+  const r=(DATA.swaps||{})[swapId]; if(!r) return;
+  const sh1=(DATA.shifts||{})[r.shiftId];
+  if(sh1){ const a=[...(sh1.assigned||[])]; const fi=a.indexOf(r.from); if(fi>=0) a[fi]=r.to; else if(!a.includes(r.to)) a.push(r.to); await dbUpdate(`shifts/${r.shiftId}`,{assigned:a}); }
+  await dbUpdate(`swaps/${swapId}`,{status:'completed'});
+  logEvent('swap_accepted',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} accepted a swap with ${gName(r.from)}`,{});
+  toast('Swap accepted! ✓');
+}
+async function declineSwap(swapId){
+  await dbUpdate(`swaps/${swapId}`,{status:'declined'});
+  logEvent('swap_declined',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} declined a swap/give request`,{});
+  toast('Declined.');
+}
+
+// ── TIME OFF — GUARD ──────────────────────────────────────────
+async function submitTimeOff(){
+  const from=getVal('g-to-from'),to=getVal('g-to-to'),reason=getVal('g-to-reason').trim();
+  if(!from||!to){ toast('Select a date range','err'); return; }
+  if(to<from){ toast('End must be after start','err'); return; }
+  const id=newKey();
+  await dbSet(`timeOff/${id}`,{id,guardId:L.user.id,from,to,reason,status:'pending'});
+  logEvent('time_off_request',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} requested time off: ${from===to?from:from+' → '+to}`,{});
+  setVal('g-to-from',''); setVal('g-to-to',''); setVal('g-to-reason','');
+  toast('Time off submitted!');
+}
+function renderGuardTimeOff(){
+  const e=el('g-timeoff-list'); if(!e) return;
+  const sorted=[...toList()].sort((a,b)=>a.from.localeCompare(b.from));
+  if(!sorted.length){ e.innerHTML='<p class="empty">No requests yet.</p>'; return; }
+  e.innerHTML=sorted.map(t=>{
+    const g=(DATA.guards||{})[t.guardId];
+    const ds=t.from===t.to?t.from:`${t.from} → ${t.to}`;
+    const isMe=t.guardId===L.user?.id;
+    return`<div class="to-row"><div><div class="to-name">${g?`${g.first} ${g.last}`:'?'}${isMe?' <span style="color:var(--muted);font-size:.7rem;">(you)</span>':''}</div><div class="to-dates">${ds}</div><span class="status-pill sp-${t.status}">${t.status}</span></div>${isMe&&t.status==='pending'?`<button class="btn btn-sm btn-danger" onclick="cancelTO('${t.id}')">Cancel</button>`:''}</div>`;
+  }).join('');
+}
+async function cancelTO(id){ await dbRemove(`timeOff/${id}`); toast('Request cancelled.'); }
+
+// ── GUARD AVAILABILITY CALENDAR ───────────────────────────────
+function renderGuardAvailCal(){
+  const c=el('g-avail-cal'); if(!c) return;
+  c.innerHTML=SEASON.map(m=>buildAvailMonth(2026,m)).join('');
+}
+function buildAvailMonth(year,month){
+  const first=new Date(year,month,1).getDay(),days=new Date(year,month+1,0).getDate();
+  const todayDS=toDS(new Date());
+  let cells='';
+  for(let i=0;i<first;i++) cells+=`<div class="cal-cell blank"></div>`;
+  for(let d=1;d<=days;d++){
+    const ds=`${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const key=`${L.user?.id}_${ds}`,isAvail=!!(DATA.availMap||{})[key],isPast=ds<todayDS;
+    cells+=`<div class="cal-cell${isAvail?' selected':''}" ${isPast?'style="cursor:default;opacity:.4;"':`onclick="toggleGuardAvail('${ds}',this)"`}>${d}${isAvail?'<span style="display:block;font-size:.4rem;color:var(--green)">✓</span>':''}</div>`;
+  }
+  return`<div class="cal-month" style="margin-bottom:1.2rem;"><div class="cal-month-name">${MONTHS[month]}</div><div class="cal-grid">${DAY_HDRS.map(h=>`<div class="cal-hdr">${h}</div>`).join('')}${cells}</div></div>`;
+}
+async function toggleGuardAvail(ds,cellEl){
+  if(!L.user?.id) return;
+  const key=`${L.user.id}_${ds}`;
+  if(!DATA.availMap) DATA.availMap={};
+  if(!DATA.availMap[key]){
+    DATA.availMap[key]={guardId:L.user.id,date:ds,availableAt:new Date().toISOString()};
+    await dbSet(`availability/${key}`,DATA.availMap[key]);
+    cellEl.classList.add('selected'); toast(`Marked available ${ds}`);
+  } else {
+    delete DATA.availMap[key]; await dbRemove(`availability/${key}`);
+    cellEl.classList.remove('selected'); toast('Availability removed');
+  }
+}
+
+// ── TIME OFF — MANAGER ────────────────────────────────────────
+function renderMgrTimeOff(){
+  const pendEl=el('m-to-pending'),allEl=el('m-to-all'); if(!pendEl||!allEl) return;
+  const pending=toList().filter(t=>t.status==='pending');
+  const all=[...toList()].sort((a,b)=>a.from.localeCompare(b.from));
+  pendEl.innerHTML=pending.length?pending.map(t=>mgrTOCard(t,true)).join(''):'<p class="empty">No pending requests.</p>';
+  allEl.innerHTML=all.length?all.map(t=>mgrTOCard(t,false)).join(''):'<p class="empty">No requests.</p>';
+}
+function mgrTOCard(t,showActions){
+  const g=(DATA.guards||{})[t.guardId],ds=t.from===t.to?t.from:`${t.from} → ${t.to}`;
+  return`<div class="to-row"><div><div class="to-name">${g?`${g.first} ${g.last}`:'?'}</div><div class="to-dates">${ds}</div>${t.reason?`<div class="to-reason">📝 ${t.reason}</div>`:''}<span class="status-pill sp-${t.status}">${t.status}</span>${showActions?`<div class="to-actions"><button class="btn btn-sm btn-green" onclick="openTOApproval('${t.id}')">✓ Review</button></div>`:''}</div></div>`;
+}
+function openTOApproval(id){
+  const t=(DATA.timeOff||{})[id]; if(!t) return;
+  const g=(DATA.guards||{})[t.guardId],ds=t.from===t.to?t.from:`${t.from} → ${t.to}`;
+  const body=el('toa-body');
+  if(body) body.innerHTML=`<div style="margin-bottom:.9rem;"><div style="font-weight:600;font-size:.95rem;">${g?g.first+' '+g.last:'?'}</div><div style="color:var(--muted);font-size:.82rem;">${ds}</div>${t.reason?`<div style="color:var(--sand);font-size:.78rem;font-style:italic;margin-top:.25rem;">📝 ${t.reason}</div>`:''}</div>`;
+  setVal('toa-id',id); openOv('ov-toapprove');
+}
+function doApproveTO(approve){ quickTO(getVal('toa-id'),approve); closeOv('ov-toapprove'); }
+async function quickTO(id,approve){
+  const t=(DATA.timeOff||{})[id]; if(!t) return;
+  await dbUpdate(`timeOff/${id}`,{status:approve?'approved':'denied'});
+  const g=(DATA.guards||{})[t.guardId],nm=g?`${g.first} ${g.last}`:'?',rng=t.from===t.to?t.from:`${t.from} → ${t.to}`;
+  logEvent(approve?'time_off_approved':'time_off_denied','Manager',`Manager ${approve?'approved':'denied'} time off for ${nm}: ${rng}`,{});
+  if(approve){ const conflicts=shiftsList().filter(s=>s.date>=t.from&&s.date<=t.to&&(s.assigned||[]).includes(t.guardId)); toast(conflicts.length?`✓ Approved — ⚠️ ${nm} is on ${conflicts.length} shift(s) in this range`:'Time off approved ✓','warn'); }
+  else toast('Request denied');
+}
+async function bulkApproveTO(){
+  const pending=toList().filter(t=>t.status==='pending');
+  if(!pending.length){ toast('No pending requests','warn'); return; }
+  const updates={}; pending.forEach(t=>{ updates[`timeOff/${t.id}/status`]='approved'; });
+  if(db) await db.ref(DB_ROOT).update(updates).catch(()=>{});
+  logEvent('time_off_approved','Manager',`Bulk approved ${pending.length} time off request${pending.length>1?'s':''}`,{});
+  toast(`✓ ${pending.length} request${pending.length>1?'s':''} approved`);
+}
+function populateMgrTOGuardSelect(){
+  const sel=el('mgr-to-guard'); if(!sel) return;
+  sel.innerHTML=guardsList().map(g=>`<option value="${g.id}">${g.first} ${g.last} (${g.type})</option>`).join('')||'<option value="">No guards yet</option>';
+}
+async function mgrAddTimeOff(){
+  const guardId=getVal('mgr-to-guard'),from=getVal('mgr-to-from'),to=getVal('mgr-to-to'),reason=getVal('mgr-to-reason').trim();
+  if(!guardId){ toast('Select a guard','err'); return; }
+  if(!from||!to){ toast('Select a date range','err'); return; }
+  if(to<from){ toast('End must be after start','err'); return; }
+  const g=(DATA.guards||{})[guardId],id=newKey();
+  await dbSet(`timeOff/${id}`,{id,guardId,from,to,reason:reason||'(Added by manager)',status:'approved'});
+  const conflicts=shiftsList().filter(s=>s.date>=from&&s.date<=to&&(s.assigned||[]).includes(guardId));
+  logEvent('time_off_approved','Manager',`Manager added time off for ${g?g.first+' '+g.last:'?'}: ${from===to?from:from+' → '+to}`,{});
+  setVal('mgr-to-from',''); setVal('mgr-to-to',''); setVal('mgr-to-reason','');
+  toast(conflicts.length?`✓ Added — ⚠️ ${g?g.first:'Guard'} is on ${conflicts.length} shift(s) in this range`:`Time off added for ${g?g.first:'guard'} ✓`,'warn');
+}
+
+// ── STAFF ─────────────────────────────────────────────────────
+function renderStaff(){
+  const rl=el('m-staff-reg-list'),bl=el('m-staff-bk-list'); if(!rl||!bl) return;
+  const reg=guardsList().filter(g=>g.type==='regular'),bk=guardsList().filter(g=>g.type==='backup');
+  rl.innerHTML=reg.length?reg.map(guardRowHTML).join(''):'<p class="empty">None yet.</p>';
+  bl.innerHTML=bk.length?bk.map(guardRowHTML).join(''):'<p class="empty">None.</p>';
+}
+function guardRowHTML(g){
+  const pCode=g.personalCode?`🔑 ${g.personalCode}`:'🔑 shared';
+  const lSeen=g.lastSeen?`Last: ${new Date(g.lastSeen).toLocaleDateString('en-US',{month:'short',day:'numeric'})} ${new Date(g.lastSeen).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`:'Never logged in';
+  return`<div class="guard-row" style="align-items:flex-start;padding:.8rem 0;"><div style="cursor:pointer;flex:1;display:flex;align-items:flex-start;gap:.68rem;" onclick="openProfile('${g.id}')"><div class="g-av${g.type==='backup'?' backup-av':''}">${g.first[0]}</div><div><div class="g-name">${g.first} ${g.last}</div><div class="g-meta">${pCode} · ${lSeen}</div><span class="g-tag ${g.type==='backup'?'tag-bk':'tag-reg'}">${g.type==='backup'?'Backup':'Regular'}</span></div></div><div style="display:flex;flex-direction:column;gap:.3rem;flex-shrink:0;"><button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();openEditCode('${g.id}')" style="font-size:.7rem">🔑</button><button class="btn btn-sm btn-danger" onclick="event.stopPropagation();removeGuard('${g.id}')">✕</button></div></div>`;
+}
+function staffTab(type,btn){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active')); btn.classList.add('active');
+  const rp=el('m-staff-regular'),bp=el('m-staff-backup');
+  if(rp) rp.style.display=type==='regular'?'block':'none';
+  if(bp) bp.style.display=type==='backup'?'block':'none';
+}
+function openAddGuard(type){
+  setText('ag-title',type==='backup'?'ADD BACKUP GUARD':'ADD LIFEGUARD');
+  setVal('ag-type',type);
+  ['ag-first','ag-last','ag-phone','ag-email','ag-code'].forEach(id=>setVal(id,''));
+  openOv('ov-addguard');
+}
+async function saveGuard(){
+  const first=getVal('ag-first').trim(),last=getVal('ag-last').trim(),phone=getVal('ag-phone').trim(),email=getVal('ag-email').trim(),type=getVal('ag-type'),personalCode=getVal('ag-code').trim();
+  if(!first||!last){ toast('Name required','err'); return; }
+  if(personalCode&&!/^\d{4}$/.test(personalCode)){ toast('Personal code must be 4 digits','err'); return; }
+  const id=newKey();
+  await dbSet(`guards/${id}`,{id,first,last,phone,email,type,personalCode,notifPrefs:{groupme:true,reminders:true,alerts:true}});
+  logEvent('guard_added','Manager',`${type==='backup'?'Backup':'Lifeguard'} added: ${first} ${last}`,{});
+  closeOv('ov-addguard'); toast(`${first} added!`);
+}
+async function removeGuard(id){
+  const g=(DATA.guards||{})[id];
+  confirmAction('REMOVE GUARD','Remove this guard from all shifts and the team?','Remove',async()=>{
+    await dbRemove(`guards/${id}`);
+    for(const [sid,sh] of Object.entries(DATA.shifts||{})){
+      if((sh.assigned||[]).includes(id)) await dbUpdate(`shifts/${sid}`,{assigned:(sh.assigned||[]).filter(a=>a!==id)});
+    }
+    logEvent('guard_removed','Manager',`Guard removed: ${g?g.first+' '+g.last:'?'}`,{});
+    toast('Guard removed');
+  });
+}
+
+// ── EDIT GUARD CODE ───────────────────────────────────────────
+function openEditCode(guardId){
+  const g=(DATA.guards||{})[guardId]; if(!g) return;
+  const nameEl=el('editcode-name'); if(nameEl) nameEl.textContent=`${g.first} ${g.last}`;
+  setVal('editcode-val',g.personalCode||''); setVal('editcode-guard-id',guardId);
+  const shared=el('editcode-shared'); if(shared) shared.textContent=DATA.config?.guardCode||'(not set)';
+  openOv('ov-editcode');
+}
+async function saveGuardCode(){
+  const guardId=getVal('editcode-guard-id'),code=getVal('editcode-val').trim();
+  if(code&&!/^\d{4}$/.test(code)){ toast('Code must be 4 digits','err'); return; }
+  await dbRef(`guards/${guardId}/personalCode`).set(code||null);
+  const g=(DATA.guards||{})[guardId];
+  logEvent('guard_added','Manager',`Code updated for ${g?g.first+' '+g.last:'guard'}`,{});
+  closeOv('ov-editcode'); toast(code?'Personal code set!':'Using shared code');
+}
+
+// ── GUARD PROFILE ─────────────────────────────────────────────
+function openProfile(guardId){
+  const g=(DATA.guards||{})[guardId]; if(!g) return;
+  const av=el('prof-av'),nm=el('prof-name'),tg=el('prof-tag');
+  if(av) av.textContent=g.first[0];
+  if(nm) nm.textContent=`${g.first} ${g.last}`;
+  if(tg) tg.innerHTML=`<span class="g-tag ${g.type==='backup'?'tag-bk':'tag-reg'}">${g.type==='backup'?'Backup Guard':'Regular Guard'}</span>`;
+  const today=toDS(new Date()),allShifts=shiftsList();
+  const myShifts=allShifts.filter(s=>(s.assigned||[]).includes(guardId));
+  const upcoming=myShifts.filter(s=>s.date>=today).sort((a,b)=>a.date.localeCompare(b.date));
+  const myLogs=Object.values(DATA.allTsLog||{}).filter(e=>e.guardId===guardId);
+  const totalHrs=myLogs.reduce((s,r)=>s+(r.adjustment!==undefined?r.adjustment:r.hrs),0);
+  const rate=parseFloat(DATA.config?.hourlyRate)||15;
+  const sf=el('prof-shifts'),hr=el('prof-hrs'),py=el('prof-pay');
+  if(sf) sf.textContent=myShifts.length; if(hr) hr.textContent=Math.max(0,totalHrs).toFixed(1); if(py) py.textContent='$'+Math.round(Math.max(0,totalHrs)*rate);
+  const upEl=el('prof-upcoming');
+  if(upEl) upEl.innerHTML=upcoming.length?upcoming.slice(0,5).map(s=>`<div class="to-row" style="padding:.5rem 0;"><div><div style="font-size:.85rem;font-weight:500;">${fmtShort(s.date)}</div><div style="font-size:.75rem;color:var(--muted)">${fmt12(s.start)}–${fmt12(s.end)}</div></div><span class="type-badge ${getShiftTypeBadgeClass(s)}">${TYPE_LABELS[s.type]||s.type}</span></div>`).join(''):'<p class="empty">No upcoming shifts.</p>';
+  const toEl=el('prof-timeoff');
+  if(toEl){ const myTO=toList().filter(t=>t.guardId===guardId).sort((a,b)=>a.from.localeCompare(b.from)); toEl.innerHTML=myTO.length?myTO.map(t=>`<div class="to-row" style="padding:.5rem 0;"><div><div style="font-size:.83rem;">${t.from===t.to?t.from:t.from+' → '+t.to}</div>${t.reason?`<div style="font-size:.73rem;color:var(--sand);font-style:italic;">${t.reason}</div>`:''}</div><span class="status-pill sp-${t.status}">${t.status}</span></div>`).join(''):'<p class="empty">No time off requests.</p>'; }
+  const swEl=el('prof-swaps');
+  if(swEl){ const mySwaps=swapsList().filter(s=>(s.from===guardId||s.to===guardId)&&['pending','broadcast'].includes(s.status)); swEl.innerHTML=mySwaps.length?mySwaps.map(s=>{const other=(DATA.guards||{})[s.from===guardId?s.to:s.from];return`<div style="padding:.4rem 0;font-size:.82rem;">${s.type==='give'?'<span class="badge b-yellow">Give Away</span>':'<span class="badge b-blue">Swap</span>'} ${other?other.first+' '+other.last:'All guards'} — <span style="color:var(--muted)">${s.status}</span></div>`;}).join(''):'<p class="empty">No active requests.</p>'; }
+  const overlay=el('ov-profile');
+  if(overlay){ overlay.style.display='flex'; setTimeout(()=>overlay.classList.add('open'),10); }
+}
+function closeProfile(){
+  const overlay=el('ov-profile');
+  if(overlay){ overlay.classList.remove('open'); setTimeout(()=>overlay.style.display='none',250); }
+}
+
+// ── MANAGER AVAILABLE LIST ────────────────────────────────────
+function renderMgrAvailList(){
+  const listEl=el('mgr-avail-list'); if(!listEl) return;
+  const today=toDS(new Date());
+  const entries=Object.values(DATA.availMap||{}).filter(e=>e.date===today).sort((a,b)=>a.availableAt.localeCompare(b.availableAt));
+  if(!entries.length){ listEl.innerHTML='<p class="empty">No guards marked available today.</p>'; return; }
+  listEl.innerHTML=entries.map((e,i)=>{
+    const g=(DATA.guards||{})[e.guardId];
+    const name=g?`${g.first} ${g.last}`:'?';
+    const time=new Date(e.availableAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    return`<div class="avail-guard-row"><div><div class="avail-guard-name">${i===0?'⭐ ':''}${name}</div><div class="avail-guard-sub">Available since ${time}</div></div><span class="avail-pill avail-yes">Free</span></div>`;
   }).join('');
 }
 
+// ── NOTIFICATIONS ─────────────────────────────────────────────
+function saveNotifPrefs(){
+  if(!L.user?.id) return;
+  dbUpdate(`guards/${L.user.id}`,{notifPrefs:{groupme:getCheck('notif-groupme'),reminders:getCheck('notif-reminders'),alerts:getCheck('notif-alerts')}});
+  toast('Preferences saved');
+}
+function loadNotifPrefs(){
+  const g=(DATA.guards||{})[L.user?.id]; if(!g) return;
+  const p=g.notifPrefs||{groupme:true,reminders:true,alerts:true};
+  setCheck('notif-groupme',p.groupme); setCheck('notif-reminders',p.reminders); setCheck('notif-alerts',p.alerts);
+}
 
-window.addEventListener('load', initFirebase);
+// ── PAYROLL ───────────────────────────────────────────────────
+function initPayroll(){
+  const now=new Date();
+  const fd=new Date(now.getFullYear(),now.getMonth(),1).toISOString().slice(0,10);
+  const ld=new Date(now.getFullYear(),now.getMonth()+1,0).toISOString().slice(0,10);
+  const pf=el('pay-from'),pt=el('pay-to');
+  if(pf&&!pf.value) pf.value=fd; if(pt&&!pt.value) pt.value=ld;
+  renderPayroll();
+}
+function renderPayroll(){
+  const from=getVal('pay-from'),to=getVal('pay-to'),wrap=el('payroll-table-wrap'),btns=el('payroll-btns');
+  if(!wrap) return;
+  if(!from||!to){ wrap.innerHTML='<p class="empty">Select a date range and tap Generate.</p>'; if(btns) btns.style.display='none'; return; }
+  const rate=parseFloat(DATA.config?.hourlyRate)||15;
+  const gt={};
+  guardsList().forEach(g=>{ gt[g.id]={guard:g,entries:[],total:0}; });
+  Object.values(DATA.allTsLog||{}).filter(e=>e.date>=from&&e.date<=to).forEach(e=>{
+    if(gt[e.guardId]){
+      gt[e.guardId].entries.push(e);
+      gt[e.guardId].total+=(e.adjustment!==undefined?e.adjustment:e.hrs);
+    }
+  });
+  const rows=Object.values(gt).filter(r=>r.entries.length>0);
+  const grand=rows.reduce((s,r)=>s+r.total,0);
+  if(!rows.length){ wrap.innerHTML='<p class="empty">No hours logged in this period.</p>'; if(btns) btns.style.display='none'; return; }
+  let html=`<div style="overflow-x:auto;"><table class="pay-table"><thead><tr><th>Guard</th><th>Shifts</th><th>Hours</th><th>Rate</th><th>Pay</th></tr></thead><tbody>`;
+  rows.forEach(r=>{ html+=`<tr><td><strong>${r.guard.first} ${r.guard.last}</strong></td><td>${r.entries.length}</td><td class="td-hrs">${Math.max(0,r.total).toFixed(2)}</td><td>$${rate.toFixed(2)}/hr</td><td class="td-pay">$${(Math.max(0,r.total)*rate).toFixed(2)}</td></tr>`; });
+  html+=`</tbody><tfoot><tr><td colspan="2"><strong>TOTAL</strong></td><td class="td-hrs">${Math.max(0,grand).toFixed(2)} hrs</td><td></td><td class="td-pay">$${(Math.max(0,grand)*rate).toFixed(2)}</td></tr></tfoot></table></div>`;
+  html+=`<details style="margin-top:.8rem;"><summary style="cursor:pointer;color:var(--muted);font-size:.8rem;padding:.4rem 0;">▼ Detailed breakdown</summary>`;
+  rows.forEach(r=>{
+    html+=`<div style="margin-top:.6rem;"><div class="card-title">${r.guard.first} ${r.guard.last}</div><table class="pay-table"><thead><tr><th>Date</th><th>In</th><th>Out</th><th>Hours</th><th>Note</th></tr></thead><tbody>`;
+    r.entries.forEach(e=>{ const hrs=e.adjustment!==undefined?e.adjustment:e.hrs; html+=`<tr><td>${e.date}</td><td>${e.in}</td><td>${e.out}</td><td class="td-hrs${hrs<0?' stat-warn':''}">${hrs>=0?'+':''}${hrs.toFixed(2)}</td><td style="font-size:.7rem;color:var(--muted)">${e.isAdjustment?e.description||'Manual adj.':''}</td></tr>`; });
+    html+=`</tbody></table></div>`;
+  });
+  html+=`</details>`;
+  wrap.innerHTML=html; if(btns) btns.style.display='block';
+}
+function exportPayroll(){
+  const from=getVal('pay-from'),to=getVal('pay-to'),rate=parseFloat(DATA.config?.hourlyRate)||15;
+  const rows=[['Guard','Type','Date','Clock In','Clock Out','Hours','Rate','Pay','Note']];
+  Object.values(DATA.allTsLog||{}).filter(e=>e.date>=from&&e.date<=to).forEach(e=>{
+    const g=(DATA.guards||{})[e.guardId],hrs=e.adjustment!==undefined?e.adjustment:e.hrs;
+    rows.push([g?`${g.first} ${g.last}`:'Unknown',g?.type||'',e.date,e.in,e.out,hrs.toFixed(2),`$${rate.toFixed(2)}`,`$${(Math.max(0,hrs)*rate).toFixed(2)}`,e.isAdjustment?e.description||'Manual adj.':'']);
+  });
+  if(rows.length<=1){ toast('No data to export','err'); return; }
+  downloadCSV(`waveguard_payroll_${from}_to_${to}.csv`,rows); toast('Payroll exported!');
+}
+
+// ── MANUAL HOUR ADJUSTMENT ────────────────────────────────────
+function openHourAdjustment(guardId){
+  const sel=el('adj-guard-sel');
+  if(sel){ sel.innerHTML=guardsList().map(g=>`<option value="${g.id}">${g.first} ${g.last}</option>`).join(''); if(guardId) sel.value=guardId; }
+  setVal('adj-hours-val',''); setVal('adj-hours-date',toDS(new Date())); setVal('adj-hours-desc','');
+  hide('adj-payroll-note'); openOv('ov-adj-hours');
+  checkAdjDate();
+}
+function checkAdjDate(){
+  const date=getVal('adj-hours-date'),lastPayout=DATA.config?.lastPayoutDate||'';
+  const note=el('adj-payroll-note'); if(!note) return;
+  if(lastPayout&&date&&date<=lastPayout){
+    note.textContent=`This date is before the last payout (${lastPayout}). It will appear in history but won't affect current payroll.`;
+    note.style.background='rgba(255,107,74,.07)'; note.style.borderColor='rgba(255,107,74,.25)'; note.style.color='var(--coral)';
+    note.style.display='block';
+  } else if(date){
+    note.textContent=`This date is within the current pay period — it WILL affect the current payroll total.`;
+    note.style.background='rgba(45,212,160,.06)'; note.style.borderColor='rgba(45,212,160,.18)'; note.style.color='var(--green)';
+    note.style.display='block';
+  } else { note.style.display='none'; }
+}
+async function saveHourAdjustment(){
+  const guardId=getVal('adj-guard-sel'),hrs=parseFloat(getVal('adj-hours-val')),date=getVal('adj-hours-date'),desc=getVal('adj-hours-desc').trim();
+  if(!guardId){ toast('Select a guard','err'); return; }
+  if(isNaN(hrs)||hrs===0){ toast('Enter a non-zero value','err'); return; }
+  if(!date){ toast('Select a date','err'); return; }
+  const g=(DATA.guards||{})[guardId],gname=g?`${g.first} ${g.last}`:'?',sign=hrs>0?'+':'';
+  const id=newKey();
+  await dbSet(`allTsLog/${id}`,{guardId,date,in:'—',out:'—',hrs:Math.abs(hrs),adjustment:hrs,isAdjustment:true,description:desc||'Manual adjustment'});
+  logEvent('manual_adjustment','Manager',`Manual hour adjustment for ${gname}: ${sign}${hrs} hrs on ${date}${desc?' — '+desc:''}`,{guardId,hrs,date});
+  closeOv('ov-adj-hours'); toast(`${sign}${hrs} hrs applied to ${gname}`);
+}
+
+// ── SETTINGS ──────────────────────────────────────────────────
+async function saveSettings(){
+  const rate=parseFloat(getVal('m-rate'))||15,gme=getVal('m-gme').trim(),rhr=parseFloat(getVal('m-reminder'))||2,lastPayout=getVal('last-payout-date')||'';
+  await dbUpdate('config',{hourlyRate:rate,groupmeBotId:gme,reminderHrs:rhr,lastPayoutDate:lastPayout});
+  toast('Settings saved!');
+}
+function testGroupMe(){ if(!getVal('m-gme').trim()){ toast('Enter Bot ID first','err'); return; } toast('Test message sent! ✓'); }
+
+// ── PRINT SCHEDULE ────────────────────────────────────────────
+function printSchedule(){
+  const allShifts=shiftsList().sort((a,b)=>a.date.localeCompare(b.date));
+  const dayMap={};
+  allShifts.forEach(sh=>{ if(!dayMap[sh.date]) dayMap[sh.date]=[]; dayMap[sh.date].push(sh); });
+  const html=Object.entries(dayMap).map(([date,shifts])=>{
+    const label=new Date(date+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+    const rows=shifts.map(sh=>{
+      const names=(sh.assigned||[]).map(id=>gName(id)).join(', ')||'Unassigned';
+      const hrs=timeToHours(sh.start,sh.end);
+      const type=sh.type==='custom'?sh.customType:(CUSTOM_TYPES.includes(sh.type)?sh.type:(TYPE_LABELS[sh.type]||sh.type));
+      return`<div class="ps"><strong>${fmt12(sh.start)} – ${fmt12(sh.end)}</strong> · ${type} · ${hrs}h · ${names}${sh.arriveTime?' (Arrive by '+fmt12(sh.arriveTime)+')':''}</div>`;
+    }).join('');
+    return`<div class="pd"><div class="pdh">${label}</div>${rows}</div>`;
+  }).join('');
+  const win=window.open('','_blank');
+  win.document.write(`<!DOCTYPE html><html><head><title>WaveGuard Season 2026</title><style>body{font-family:sans-serif;padding:2rem;max-width:800px;margin:0 auto;} h1{text-align:center;margin-bottom:.5rem;} .sub{text-align:center;color:#666;margin-bottom:2rem;font-size:.9rem;} .pd{margin-bottom:1.5rem;page-break-inside:avoid;} .pdh{font-weight:700;font-size:1rem;border-bottom:2px solid #333;padding-bottom:.3rem;margin-bottom:.5rem;} .ps{font-size:.88rem;margin-bottom:.3rem;padding:.2rem 0;border-bottom:1px solid #eee;} @media print{button{display:none;}}</style></head><body><h1>WaveGuard — Season 2026</h1><p class="sub">Printed ${new Date().toLocaleDateString()}</p><button onclick="window.print()" style="margin-bottom:1.5rem;padding:.5rem 1.5rem;cursor:pointer;">🖨️ Print</button>${html||'<p>No shifts scheduled yet.</p>'}</body></html>`);
+  win.document.close();
+}
+
+// ── CSV DOWNLOAD ──────────────────────────────────────────────
+function downloadCSV(filename,rows){
+  const csv=rows.map(r=>r.map(v=>{ const s=String(v); return s.includes(',')?'"'+s.replace(/"/g,'""')+'"':s; }).join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});
+  const url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url; a.download=filename; a.click(); URL.revokeObjectURL(url);
+}
+
+// ── BOOT ──────────────────────────────────────────────────────
+function boot(){
+  try{ const s=localStorage.getItem('wg_config'); if(s){ const c=JSON.parse(s); if(c&&c.setupDone) return; } }catch(e){}
+  if(db){ dbGet('config').then(config=>{ if(!config||!config.setupDone) showSetupPage(); }).catch(()=>showSetupPage()); }
+  else showSetupPage();
+}
+
+// ── FIREBASE INIT ─────────────────────────────────────────────
+function initFirebase(){
+  const statusEl=el('loading-status');
+  let attempts=0;
+  function tryConnect(){
+    attempts++;
+    if(statusEl) statusEl.textContent=attempts>1?`Connecting… (${attempts})`:'Connecting…';
+    if(typeof firebase==='undefined'){
+      if(attempts<25){ setTimeout(tryConnect,400); return; }
+      showConnectError(); return;
+    }
+    try{
+      if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+      db=firebase.database();
+      console.log('✅ Firebase ready after',attempts,'attempt(s)');
+      hide('loading-screen');
+      show('login-screen','flex');
+      boot();
+    }catch(e){
+      console.error('Firebase init error:',e);
+      if(attempts<25){ setTimeout(tryConnect,400); return; }
+      showConnectError();
+    }
+  }
+  tryConnect();
+}
+
+function showConnectError(){
+  const ls=el('loading-screen');
+  if(ls) ls.innerHTML=`<div style="text-align:center;padding:2rem;font-family:'DM Sans',sans-serif;"><div style="font-size:2.5rem;margin-bottom:.8rem;">🌊</div><div style="font-family:'Bebas Neue',sans-serif;font-size:2.2rem;letter-spacing:3px;color:#2ec4e0;margin-bottom:.5rem;">WaveGuard</div><div style="color:#7a95a8;font-size:.88rem;margin-bottom:1.5rem;line-height:1.7;">Having trouble connecting.<br>Check your internet connection<br>and try again.</div><button onclick="location.reload()" style="background:linear-gradient(135deg,#2ec4e0,#1a8ab0);color:#fff;border:none;border-radius:12px;padding:.9rem 2.2rem;font-size:1rem;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">🔄 Tap to Retry</button></div>`;
+}
+
+window.addEventListener('load',initFirebase);
+
 </script>
 </div>
 </body>
