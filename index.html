@@ -2,6 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>WaveGuard</title>
 <style>
@@ -424,7 +427,7 @@ select option{background:#0e2030;}
 <div id="login-screen" style="display:none;">
   <div class="wave-icon">🏊</div>
   <div class="logo">WaveGuard</div>
-  <div class="logo-sub">Lifeguard Scheduling · Season 2025</div>
+  <div class="logo-sub">Lifeguard Scheduling · Season 2026</div>
   <div class="login-card">
     <h2>Sign In</h2>
     <div class="fg"><label>First Name</label><input type="text" id="li-first" placeholder="Your first name" autocomplete="given-name"/></div>
@@ -1042,6 +1045,14 @@ select option{background:#0e2030;}
 <script>
 'use strict';
 
+// Unregister any old service workers that might serve cached content
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.getRegistrations().then(regs=>{
+    regs.forEach(r=>r.unregister());
+  });
+}
+
+
 // ============================================================
 // FIREBASE CONFIG & INIT
 // ============================================================
@@ -1105,17 +1116,8 @@ function initFirebase(){
         setTimeout(tryInit, 500);
       } else {
         const ls = document.getElementById('loading-screen');
-        if(ls) ls.innerHTML = `
-          <div style="text-align:center;padding:2rem;font-family:'DM Sans',sans-serif;">
-            <div style="font-size:2rem;margin-bottom:1rem;">🌊</div>
-            <div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:3px;color:#2ec4e0;margin-bottom:.5rem;">WaveGuard</div>
-            <div style="color:#7a95a8;font-size:.85rem;margin-bottom:1.5rem;line-height:1.6;">
-              Could not connect to the database.<br>Check your internet and try again.
-            </div>
-            <button onclick="location.reload()" style="background:linear-gradient(135deg,#2ec4e0,#1a8ab0);color:#fff;border:none;border-radius:12px;padding:.85rem 2rem;font-size:1rem;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">
-              🔄 Tap to Retry
-            </button>
-          </div>`;
+        // SDK failed — try REST API as last resort
+        bootWithREST();
       }
     }
   }
@@ -1626,6 +1628,62 @@ function boot(){
       showSetupPage();
     }
   }).catch(()=>{ showSetupPage(); });
+}
+
+
+// ============================================================
+// FIREBASE REST API FALLBACK (no SDK needed)
+// Used if SDK fails to load from CDN
+// ============================================================
+const FB_REST_URL = 'https://waveguard-2026-default-rtdb.firebaseio.com';
+
+async function restGet(path){
+  const res = await fetch(`${FB_REST_URL}/waveguard2026/${path}.json`);
+  if(!res.ok) throw new Error(`REST GET failed: ${res.status}`);
+  return res.json();
+}
+
+async function restSet(path, data){
+  const res = await fetch(`${FB_REST_URL}/waveguard2026/${path}.json`, {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(data)
+  });
+  if(!res.ok) throw new Error(`REST PUT failed: ${res.status}`);
+  return res.json();
+}
+
+// REST-based boot (no SDK)
+async function bootWithREST(){
+  console.log('📡 Using REST API fallback (no SDK)');
+  try {
+    const config = await restGet('config');
+    if(!config || !config.setupDone){
+      showSetupPage();
+    }
+    // Show login
+    const ls=document.getElementById('loading-screen');
+    const login=document.getElementById('login-screen');
+    if(ls) ls.style.display='none';
+    if(login) login.style.display='flex';
+    // Mark that we're in REST mode
+    window._restMode = true;
+    toast('Connected in offline mode — some live features may be limited','warn');
+  } catch(e){
+    console.error('REST fallback also failed:', e);
+    const ls=document.getElementById('loading-screen');
+    if(ls) ls.innerHTML=`
+      <div style="text-align:center;padding:2rem;font-family:'DM Sans',sans-serif;">
+        <div style="font-size:2rem;margin-bottom:1rem;">🌊</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:3px;color:#2ec4e0;margin-bottom:.5rem;">WaveGuard</div>
+        <div style="color:#7a95a8;font-size:.85rem;margin-bottom:1.5rem;line-height:1.6;">
+          No internet connection detected.<br>Connect to WiFi or mobile data and try again.
+        </div>
+        <button onclick="location.reload()" style="background:linear-gradient(135deg,#2ec4e0,#1a8ab0);color:#fff;border:none;border-radius:12px;padding:.85rem 2rem;font-size:1rem;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">
+          🔄 Tap to Retry
+        </button>
+      </div>`;
+  }
 }
 
 // ============================================================
