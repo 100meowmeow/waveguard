@@ -2757,25 +2757,86 @@ function updateSickButton(){
 
 // ── BOOT ──────────────────────────────────────────────────────
 async function boot(){
-  // Firebase REST is already available — check if setup is done
+  // Always hide loading screen and show login — no matter what.
+  // Loading screen should NEVER block the user.
+  function showLogin(){
+    hide('loading-screen');
+    show('login-screen','flex');
+  }
+
+  // Step 1: Check localStorage immediately (instant, no network)
+  try{
+    const s=localStorage.getItem('wg_config');
+    if(s){
+      const cached=JSON.parse(s);
+      if(cached&&cached.setupDone){
+        DATA.config=cached;
+        showLogin(); // Show login immediately from cache
+        // Then try to refresh config from Firebase in background
+        fbGet('config').then(live=>{
+          if(live&&live.setupDone){ DATA.config=live; localStorage.setItem('wg_config',JSON.stringify(live)); }
+        }).catch(()=>{});
+        return;
+      }
+    }
+  }catch(e){}
+
+  // Step 2: No local cache — try Firebase with a 5-second timeout
+  const statusEl=el('loading-status');
+  if(statusEl) statusEl.textContent='Connecting…';
+
   let config=null;
-  try{ config=await fbGet('config'); }catch(e){}
-  if(!config){ try{ const s=localStorage.getItem('wg_config'); if(s) config=JSON.parse(s); }catch(e){} }
-  if(!config||!config.setupDone){ showSetupPage(); return; }
-  DATA.config=config;
-  try{ localStorage.setItem('wg_config',JSON.stringify(config)); }catch(e){}
-  hide('loading-screen');
-  show('login-screen','flex');
+  try{
+    config=await Promise.race([
+      fbGet('config'),
+      new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),5000))
+    ]);
+  }catch(e){
+    console.warn('Firebase config load failed:',e.message);
+  }
+
+  // Step 3: Always show something — never leave user on loading screen
+  if(config&&config.setupDone){
+    DATA.config=config;
+    try{ localStorage.setItem('wg_config',JSON.stringify(config)); }catch(e){}
+    showLogin();
+  } else if(!config){
+    // Firebase unreachable — show login anyway, doLogin will handle it
+    console.warn('Could not reach Firebase — showing login with offline notice');
+    showLogin();
+    // Show a subtle warning (not blocking)
+    setTimeout(()=>{
+      const warn=document.createElement('div');
+      warn.style.cssText='position:fixed;bottom:1.5rem;left:1rem;right:1rem;background:rgba(255,209,102,.15);border:1px solid rgba(255,209,102,.3);color:var(--yellow);border-radius:10px;padding:.6rem .9rem;font-size:.78rem;text-align:center;z-index:500;font-family:"DM Sans",sans-serif;';
+      warn.textContent='⚠️ Connection slow — some features may be limited until connected';
+      document.body.appendChild(warn);
+      setTimeout(()=>warn.remove(),6000);
+    },500);
+  } else {
+    // No setup done yet — show setup page
+    showSetupPage();
+  }
 }
 
 // ── START ─────────────────────────────────────────────────────
 // No SDK to load. Firebase REST works immediately with fetch().
 // Just wait for DOM to be ready, then boot.
+// Start boot
 if(document.readyState==='loading'){
   document.addEventListener('DOMContentLoaded', boot);
 } else {
   boot();
 }
+
+// Absolute failsafe: if loading screen still showing after 7 seconds, force login
+setTimeout(()=>{
+  const ls=el('loading-screen');
+  if(ls&&ls.style.display!=='none'&&!ls.classList.contains('hidden')){
+    console.warn('Failsafe: forcing login screen after timeout');
+    hide('loading-screen');
+    show('login-screen','flex');
+  }
+},7000);
 
 </script>
 </div>
