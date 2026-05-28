@@ -381,6 +381,21 @@ select option{background:#0e2030;}
 .loading-spinner{width:40px;height:40px;border:3px solid rgba(46,196,224,.2);border-top-color:#2ec4e0;border-radius:50%;animation:spin 0.8s linear infinite;margin-bottom:1rem;}
 @keyframes spin{to{transform:rotate(360deg);}}
 .loading-status{font-size:.8rem;color:#7a95a8;text-align:center;}
+
+/* MY SHIFTS TAB */
+.my-shift-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:1rem;margin-bottom:.75rem;position:relative;}
+.my-shift-card.upcoming{border-left:3px solid var(--wave);}
+.my-shift-card.past{opacity:.6;border-left:3px solid var(--border);}
+.my-shift-card.today{border-left:3px solid var(--green);background:rgba(45,212,160,.05);}
+.ms-date{font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:1px;color:#fff;margin-bottom:.2rem;}
+.ms-time{font-size:.88rem;color:var(--wave);font-weight:600;margin-bottom:.4rem;}
+.ms-type{display:inline-block;margin-bottom:.5rem;}
+.ms-crew{font-size:.8rem;color:#fff;margin-bottom:.3rem;}
+.ms-crew span{color:var(--muted);}
+.ms-note{font-size:.75rem;color:var(--sand);font-style:italic;margin-bottom:.3rem;}
+.ms-avail{font-size:.75rem;color:var(--green);margin-top:.3rem;}
+.ms-past-label{position:absolute;top:.6rem;right:.7rem;font-size:.6rem;letter-spacing:1px;text-transform:uppercase;color:var(--muted);}
+.ms-divider{text-align:center;padding:.5rem 0;color:var(--muted);font-size:.75rem;letter-spacing:1px;text-transform:uppercase;margin:.5rem 0;}
 </style>
 
 </head>
@@ -483,6 +498,13 @@ select option{background:#0e2030;}
       <div id="g-season-cal"></div>
     </div>
     <!-- GUARD SWAPS -->
+
+    <!-- GUARD MY SHIFTS -->
+    <div class="screen" id="g-screen-shifts">
+      <div class="section-title">MY SHIFTS</div>
+      <div id="g-shifts-list"></div>
+    </div>
+
     <div class="screen" id="g-screen-swaps">
       <div class="section-title">SHIFT SWAPS</div>
       <div class="swap-type-grid">
@@ -535,7 +557,7 @@ select option{background:#0e2030;}
   </div>
   <nav class="bottom-nav">
     <button class="nav-btn active" id="g-nav-home" onclick="gNav('home',this)"><div class="nav-icon">🏠</div><div class="nav-label">Home</div></button>
-    <button class="nav-btn" id="g-nav-calendar" onclick="gNav('calendar',this)"><div class="nav-icon">📅</div><div class="nav-label">Schedule</div></button>
+    <button class="nav-btn" id="g-nav-shifts" onclick="gNav('shifts',this)"><div class="nav-icon">📋</div><div class="nav-label">My Shifts</div></button>
     <button class="nav-btn" id="g-nav-swaps" onclick="gNav('swaps',this)"><div class="nav-icon">🔄</div><div class="nav-label">Swaps</div></button>
     <button class="nav-btn" id="g-nav-timesheet" onclick="gNav('timesheet',this)"><div class="nav-icon">💰</div><div class="nav-label">Hours</div></button>
     <button class="nav-btn" id="g-nav-timeoff" onclick="gNav('timeoff',this)"><div class="nav-icon">🗓</div><div class="nav-label">Time Off</div></button>
@@ -1414,18 +1436,6 @@ function doLogout(){
 }
 function toggleDD(id){ const e=el(id); if(e) e.classList.toggle('hidden'); }
 
-// ── MOUNT ─────────────────────────────────────────────────────
-function mountGuard(first,last){
-  hide('loading-screen'); hide('login-screen'); hide('mgr-app');
-  show('guard-app','flex');
-  setText('g-hdr-name',first);
-  setText('g-greeting',`HEY, ${first.toUpperCase()}!`);
-  setText('g-date',new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}));
-  setText('g-dd-name',`${first} ${last}`);
-  const av=el('g-avatar'); if(av) av.textContent=first[0].toUpperCase();
-  renderNextShift(); renderTimesheet(); renderSwaps(); renderGuardTimeOff(); renderGuardCal();
-  gNav('home');
-}
 function mountManager(first,last){
   hide('loading-screen'); hide('login-screen'); hide('guard-app');
   show('mgr-app','flex');
@@ -1441,16 +1451,6 @@ function mountManager(first,last){
   mNav('home');
 }
 
-// ── NAVIGATION ────────────────────────────────────────────────
-function gNav(screen,btn){
-  ['home','calendar','swaps','timesheet','timeoff'].forEach(s=>{
-    removeClass('g-screen-'+s,'active'); removeClass('g-nav-'+s,'active');
-  });
-  addClass('g-screen-'+screen,'active');
-  if(btn) btn.classList.add('active'); else addClass('g-nav-'+screen,'active');
-  if(screen==='swaps') renderSwaps();
-  if(screen==='timeoff'){ renderGuardTimeOff(); renderGuardAvailCal(); loadNotifPrefs(); }
-}
 function mNav(screen,btn){
   ['home','calendar','timeoff','staff','settings','log','payroll'].forEach(s=>{
     removeClass('m-screen-'+s,'active'); removeClass('m-nav-'+s,'active');
@@ -1877,14 +1877,6 @@ async function doCopyWeek(){
 
 // ── WEEK AT A GLANCE ──────────────────────────────────────────
 let _weekStart=null;
-function openWeekGlance(){
-  if(!_weekStart) _weekStart=getMonday(new Date());
-  const minDate=new Date(2026,Math.min(...SEASON),1);
-  const maxDate=new Date(2026,Math.max(...SEASON)+1,0);
-  if(_weekStart<getMonday(minDate)) _weekStart=getMonday(minDate);
-  if(_weekStart>maxDate) _weekStart=getMonday(maxDate);
-  renderWeekView(); openOv('ov-week');
-}
 function weekPrev(){
   const prev=addDays(_weekStart,-7);
   if(prev<getMonday(new Date(2026,Math.min(...SEASON),1))) return;
@@ -2003,14 +1995,6 @@ function renderTimesheet(){
     :'<p class="empty">No entries yet.</p>';
 }
 
-// ── SICK / CLOSURE ────────────────────────────────────────────
-function openSickModal(){
-  const today=toDS(new Date());
-  const mine=shiftsList().filter(s=>s.date===today&&(s.assigned||[]).includes(L.user?.id));
-  const sel=el('sick-sel'); if(!sel) return;
-  sel.innerHTML=mine.length?mine.map(s=>`<option value="${s.id}">Today ${fmt12(s.start)}–${fmt12(s.end)}</option>`).join(''):'<option>No shifts today</option>';
-  openOv('ov-sick');
-}
 async function confirmSick(){
   const shiftId=getVal('sick-sel'), shift=(DATA.shifts||{})[shiftId];
   const actor=L.user?`${L.user.first} ${L.user.last}`:'?';
@@ -2031,48 +2015,7 @@ async function sendClosure(){
   toast('⚠️ Pool closure alert sent!');
 }
 
-// ── SWAPS ─────────────────────────────────────────────────────
-function openSwapModal(mode){
-  L.swapMode=mode;
-  setText('ov-swap-title',mode==='swap'?'REQUEST SWAP':'GIVE SHIFT AWAY');
-  const today=toDS(new Date());
-  const myShifts=shiftsList().filter(s=>s.date>=today&&(s.assigned||[]).includes(L.user?.id));
-  const opts=myShifts.length?myShifts.map(s=>`<option value="${s.id}">${fmtShort(s.date)} · ${fmt12(s.start)}–${fmt12(s.end)}</option>`).join(''):'<option value="">No upcoming shifts</option>';
-  let html=`<div class="fg"><label>Shift to ${mode==='swap'?'Swap':'Give Away'}</label><select id="sw-myshift">${opts}</select></div>`;
-  if(mode==='swap'){
-    const others=guardsList().filter(g=>g.id!==L.user?.id);
-    html+=`<div class="fg"><label>Swap with</label><select id="sw-with">${others.map(g=>`<option value="${g.id}">${g.first} ${g.last}${g.type==='backup'?' ⭐':''}</option>`).join('')}</select></div>`;
-    html+=`<div class="info-box">They can accept or decline. Simple as that.</div>`;
-  } else {
-    const shiftId=myShifts[0]?.id, shift=shiftId?(DATA.shifts||{})[shiftId]:null;
-    const availNames=shift?Object.values(DATA.availMap||{}).filter(e=>e.date===shift.date).map(e=>gName(e.guardId)).filter(Boolean):[];
-    html+=availNames.length?`<div class="info-box">✓ Available on this day: <strong>${availNames.join(', ')}</strong></div>`:`<div class="info-box">Broadcasts to all guards. First to accept gets your shift.</div>`;
-  }
-  html+=`<div class="fg"><label>Message (optional)</label><input type="text" id="sw-msg" placeholder="e.g. Doctor appointment"/></div>`;
-  setHTML('ov-swap-body',html);
-  const btn=el('swap-submit-btn'); if(btn) btn.textContent=mode==='swap'?'Send Swap Request':'Broadcast to All';
-  openOv('ov-swap');
-}
-async function sendSwapRequest(){
-  const shiftId=getVal('sw-myshift'), msg=getVal('sw-msg');
-  if(!shiftId){ toast('No shift selected','err'); return; }
-  const id=newKey();
-  if(L.swapMode==='swap'){
-    const toId=getVal('sw-with'); if(!toId){ toast('Select a guard','err'); return; }
-    await fbSet(`swaps/${id}`,{id,type:'swap',from:L.user.id,to:toId,shiftId,message:msg,status:'pending'});
-    logEvent('swap_request',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} requested a swap with ${gName(toId)}`,{});
-    toast('Swap request sent!');
-  } else {
-    await fbSet(`swaps/${id}`,{id,type:'give',from:L.user.id,to:null,shiftId,message:msg,status:'broadcast'});
-    const shift=(DATA.shifts||{})[shiftId];
-    const desc=shift?`${shift.date} ${fmt12(shift.start)}–${fmt12(shift.end)}`:'a shift';
-    logEvent('give_request',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} is giving away a shift`,{});
-    postGroupMe(`📢 SHIFT AVAILABLE!\n${L.user.first} ${L.user.last} is giving away:\n📅 ${desc}\nFirst to accept in WaveGuard gets it!`);
-    toast('Broadcast sent!');
-  }
-  closeOv('ov-swap');
-}
-function renderSwaps(){
+async function renderSwaps(){
   const inEl=el('g-swaps-in'), outEl=el('g-swaps-out'); if(!inEl||!outEl) return;
   const myId=L.user?.id;
   const incoming=swapsList().filter(r=>(r.type==='give'&&r.status==='broadcast'&&r.from!==myId)||(r.to===myId&&r.status==='pending'));
@@ -2100,53 +2043,9 @@ function swapCardHTML(r,dir){
   }
   return h+'</div>';
 }
-async function acceptGive(swapId){
-  const r=(DATA.swaps||{})[swapId]; if(!r) return;
-  const shift=(DATA.shifts||{})[r.shiftId];
-  if(shift){
-    const a=[...(shift.assigned||[])].filter(id=>id!==r.from);
-    if(!a.includes(L.user.id)) a.push(L.user.id);
-    await fbUpdate(`shifts/${r.shiftId}`,{assigned:a});
-  }
-  await fbUpdate(`swaps/${swapId}`,{status:'completed'});
-  for(const [sid,s] of Object.entries(DATA.swaps||{})){
-    if(s.type==='give'&&s.shiftId===r.shiftId&&sid!==swapId&&s.status==='broadcast')
-      await fbUpdate(`swaps/${sid}`,{status:'cancelled'});
-  }
-  logEvent('give_accepted',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} accepted a shift from ${gName(r.from)}`,{});
-  toast('Shift accepted! ✓');
-}
-async function acceptSwap(swapId){
-  const r=(DATA.swaps||{})[swapId]; if(!r) return;
-  const sh1=(DATA.shifts||{})[r.shiftId];
-  if(sh1){
-    const a=[...(sh1.assigned||[])];
-    const fi=a.indexOf(r.from);
-    if(fi>=0) a[fi]=r.to; else if(!a.includes(r.to)) a.push(r.to);
-    await fbUpdate(`shifts/${r.shiftId}`,{assigned:a});
-  }
-  await fbUpdate(`swaps/${swapId}`,{status:'completed'});
-  logEvent('swap_accepted',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} accepted a swap with ${gName(r.from)}`,{});
-  toast('Swap accepted! ✓');
-}
-async function declineSwap(swapId){
-  await fbUpdate(`swaps/${swapId}`,{status:'declined'});
-  logEvent('swap_declined',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} declined`,{});
-  toast('Declined.');
-}
-
+async async async 
 // ── TIME OFF — GUARD ──────────────────────────────────────────
-async function submitTimeOff(){
-  const from=getVal('g-to-from'), to=getVal('g-to-to'), reason=getVal('g-to-reason').trim();
-  if(!from||!to){ toast('Select a date range','err'); return; }
-  if(to<from){ toast('End must be after start','err'); return; }
-  const id=newKey();
-  await fbSet(`timeOff/${id}`,{id,guardId:L.user.id,from,to,reason,status:'pending'});
-  logEvent('time_off_request',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} requested time off: ${from===to?from:from+' → '+to}`,{});
-  setVal('g-to-from',''); setVal('g-to-to',''); setVal('g-to-reason','');
-  toast('Time off submitted!');
-}
-function renderGuardTimeOff(){
+async function renderGuardTimeOff(){
   const e=el('g-timeoff-list'); if(!e) return;
   const sorted=[...toList()].sort((a,b)=>a.from.localeCompare(b.from));
   if(!sorted.length){ e.innerHTML='<p class="empty">No requests yet.</p>'; return; }
@@ -2349,14 +2248,7 @@ function openEditCode(guardId){
   const shared=el('editcode-shared'); if(shared) shared.textContent=DATA.config?.guardCode||'(not set)';
   openOv('ov-editcode');
 }
-async function saveGuardCode(){
-  const guardId=getVal('editcode-guard-id'), code=getVal('editcode-val').trim();
-  if(code&&!/^\d{4}$/.test(code)){ toast('Code must be 4 digits','err'); return; }
-  await fbSet(`guards/${guardId}/personalCode`,code||null);
-  logEvent('guard_added','Manager',`Code updated for ${gName(guardId)}`,{});
-  closeOv('ov-editcode'); toast(code?'Personal code set!':'Using shared code');
-}
-
+async 
 // ── GUARD PROFILE ─────────────────────────────────────────────
 function openProfile(guardId){
   const g=(DATA.guards||{})[guardId]; if(!g) return;
@@ -2546,6 +2438,322 @@ function downloadCSV(filename,rows){
   const url=URL.createObjectURL(blob), a=document.createElement('a');
   a.href=url; a.download=filename; a.click(); URL.revokeObjectURL(url);
 }
+
+// ============================================================
+// FIX: gNav — add 'shifts' screen
+// ============================================================
+function gNav(screen,btn){
+  ['home','calendar','swaps','timesheet','timeoff','shifts'].forEach(s=>{
+    removeClass('g-screen-'+s,'active'); removeClass('g-nav-'+s,'active');
+  });
+  addClass('g-screen-'+screen,'active');
+  if(btn) btn.classList.add('active'); else addClass('g-nav-'+screen,'active');
+  if(screen==='swaps') renderSwaps();
+  if(screen==='timeoff'){ renderGuardTimeOff(); renderGuardAvailCal(); loadNotifPrefs(); }
+  if(screen==='shifts') renderMyShifts();
+}
+
+// ============================================================
+// FIX: renderMyShifts — guard's own shift list
+// ============================================================
+function renderMyShifts(){
+  const c=el('g-shifts-list'); if(!c) return;
+  const myId=L.user?.id; if(!myId){ c.innerHTML='<p class="empty">Not logged in.</p>'; return; }
+  const all=shiftsList().filter(s=>(s.assigned||[]).includes(myId));
+  if(!all.length){ c.innerHTML='<p class="empty">No shifts scheduled yet.</p>'; return; }
+  all.sort((a,b)=>a.date.localeCompare(b.date)||a.start.localeCompare(b.start));
+  const todayDS=toDS(new Date());
+  const past=all.filter(s=>s.date<todayDS);
+  const todayShifts=all.filter(s=>s.date===todayDS);
+  const upcoming=all.filter(s=>s.date>todayDS);
+  function makeCard(sh,cls,label){
+    const crew=(sh.assigned||[]).filter(id=>id!==myId).map(id=>gName(id));
+    const availNames=Object.values(DATA.availMap||{}).filter(e=>e.date===sh.date&&e.guardId!==myId).map(e=>gName(e.guardId)).filter(Boolean);
+    const typeLabel=sh.type==='custom'?sh.customType:(TYPE_LABELS[sh.type]||sh.type);
+    return`<div class="my-shift-card ${cls}">
+      ${label?`<div class="ms-past-label">${label}</div>`:''}
+      <div class="ms-date">${fmtLong(sh.date)}</div>
+      <div class="ms-time">${fmt12(sh.start)} – ${fmt12(sh.end)}</div>
+      <span class="type-badge ${getShiftTypeBadgeClass(sh)} ms-type">${typeLabel}</span>
+      ${sh.arriveTime?`<div style="font-size:.75rem;color:var(--yellow);margin-bottom:.3rem;">⏰ Arrive by ${fmt12(sh.arriveTime)}</div>`:''}
+      <div class="ms-crew"><span>Working with: </span>${crew.length?crew.join(', '):'Just you'}</div>
+      ${sh.note?`<div class="ms-note">📝 ${sh.note}</div>`:''}
+      ${availNames.length?`<div class="ms-avail">🙋 Available to swap: ${availNames.join(', ')}</div>`:''}
+    </div>`;
+  }
+  let html='';
+  if(upcoming.length||todayShifts.length){
+    if(todayShifts.length) html+=todayShifts.map(s=>makeCard(s,'today','')).join('');
+    html+=upcoming.map(s=>makeCard(s,'upcoming','')).join('');
+  } else {
+    html+='<p class="empty">No upcoming shifts.</p>';
+  }
+  if(past.length){
+    html+=`<div class="ms-divider">— Past Shifts —</div>`;
+    html+=[...past].reverse().map(s=>makeCard(s,'past','Past')).join('');
+  }
+  c.innerHTML=html;
+}
+
+// ============================================================
+// FIX: openSwapModal — only show guard's own shifts; check duplicates
+// ============================================================
+function openSwapModal(mode){
+  L.swapMode=mode;
+  setText('ov-swap-title',mode==='swap'?'REQUEST SWAP':'GIVE SHIFT AWAY');
+  const today=toDS(new Date());
+  // Only show shifts THIS guard is assigned to
+  const myShifts=shiftsList().filter(s=>s.date>=today&&(s.assigned||[]).includes(L.user?.id));
+  const opts=myShifts.length
+    ?myShifts.map(s=>`<option value="${s.id}">${fmtShort(s.date)} · ${fmt12(s.start)}–${fmt12(s.end)}</option>`).join('')
+    :'<option value="">You have no upcoming shifts</option>';
+  let html=`<div class="fg"><label>Your Shift</label><select id="sw-myshift" onchange="onSwapShiftChange(this.value,${mode==='give'})">${opts}</select></div>`;
+  if(mode==='swap'){
+    const others=guardsList().filter(g=>g.id!==L.user?.id);
+    html+=`<div class="fg"><label>Swap with</label><select id="sw-with">${others.map(g=>`<option value="${g.id}">${g.first} ${g.last}${g.type==='backup'?' ⭐':''}</option>`).join('')}</select></div>`;
+    html+=`<div class="info-box" style="margin-top:.3rem;">They can accept or decline. Simple as that.</div>`;
+  } else {
+    const firstShiftId=myShifts[0]?.id;
+    const avail=firstShiftId?Object.values(DATA.availMap||{}).filter(e=>e.date===(DATA.shifts||{})[firstShiftId]?.date).map(e=>gName(e.guardId)).filter(Boolean):[];
+    html+=`<div id="sw-avail-info" class="info-box" style="margin-top:.3rem;">${avail.length?'✓ Available on this day: <strong>'+avail.join(', ')+'</strong>':'Broadcasts to all guards. First to accept wins.'}</div>`;
+  }
+  html+=`<div class="fg"><label>Message (optional)</label><input type="text" id="sw-msg" placeholder="e.g. Doctor appointment"/></div>`;
+  html+=`<div id="sw-dup-warn" class="warn-box" style="display:none;margin-top:.4rem;"></div>`;
+  setHTML('ov-swap-body',html);
+  const btn=el('swap-submit-btn'); if(btn) btn.textContent=mode==='swap'?'Send Swap Request':'Broadcast to All';
+  // Check for duplicates on first shift
+  if(myShifts.length) checkSwapDuplicate(myShifts[0].id,mode);
+  openOv('ov-swap');
+}
+
+function onSwapShiftChange(shiftId,isGive){
+  if(isGive){
+    const shift=(DATA.shifts||{})[shiftId];
+    const avail=shift?Object.values(DATA.availMap||{}).filter(e=>e.date===shift.date).map(e=>gName(e.guardId)).filter(Boolean):[];
+    const info=el('sw-avail-info');
+    if(info) info.innerHTML=avail.length?'✓ Available on this day: <strong>'+avail.join(', ')+'</strong>':'Broadcasts to all guards. First to accept wins.';
+  }
+  checkSwapDuplicate(shiftId,L.swapMode);
+}
+
+function checkSwapDuplicate(shiftId,mode){
+  const warn=el('sw-dup-warn'); if(!warn) return;
+  const existing=swapsList().find(s=>s.from===L.user?.id&&s.shiftId===shiftId&&['pending','broadcast'].includes(s.status));
+  if(existing){
+    warn.textContent=mode==='give'?'⚠️ You already broadcast this shift. Cancel the existing one first.':'⚠️ You already sent a swap request for this shift.';
+    warn.style.display='block';
+    const btn=el('swap-submit-btn'); if(btn) btn.disabled=true;
+  } else {
+    warn.style.display='none';
+    const btn=el('swap-submit-btn'); if(btn) btn.disabled=false;
+  }
+}
+
+// ============================================================
+// FIX: sendSwapRequest — duplicate check + clear feedback
+// ============================================================
+async function sendSwapRequest(){
+  const shiftId=getVal('sw-myshift'), msg=getVal('sw-msg');
+  if(!shiftId||!L.user?.id){ toast('No shift selected','err'); return; }
+
+  // Duplicate check
+  const existing=swapsList().find(s=>s.from===L.user.id&&s.shiftId===shiftId&&['pending','broadcast'].includes(s.status));
+  if(existing){ toast('You already have an active request for this shift','err'); return; }
+
+  const btn=el('swap-submit-btn');
+  if(btn){btn.disabled=true;btn.textContent='Sending…';}
+
+  try{
+    const id=newKey();
+    if(L.swapMode==='swap'){
+      const toId=getVal('sw-with'); if(!toId){ toast('Select a guard','err'); if(btn){btn.disabled=false;btn.textContent='Send Swap Request';} return; }
+      await fbSet(`swaps/${id}`,{id,type:'swap',from:L.user.id,to:toId,shiftId,message:msg,status:'pending'});
+      await logEvent('swap_request',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} requested a swap with ${gName(toId)}`,{shiftId});
+      closeOv('ov-swap');
+      toast('✓ Swap request sent! They'll be notified.');
+    } else {
+      await fbSet(`swaps/${id}`,{id,type:'give',from:L.user.id,to:null,shiftId,message:msg,status:'broadcast'});
+      const shift=(DATA.shifts||{})[shiftId];
+      const desc=shift?`${fmtShort(shift.date)} ${fmt12(shift.start)}–${fmt12(shift.end)}`:'your shift';
+      await logEvent('give_request',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} broadcast a give-away for ${desc}`,{shiftId});
+      postGroupMe(`📢 SHIFT AVAILABLE!\n${L.user.first} ${L.user.last} is giving away:\n📅 ${desc}\nFirst to accept in WaveGuard gets it!`);
+      closeOv('ov-swap');
+      toast('📢 Broadcast sent! Everyone has been notified.');
+    }
+  } catch(e){
+    console.error('sendSwapRequest failed:',e);
+    toast('Failed to send — check your connection','err');
+    if(btn){btn.disabled=false;btn.textContent=L.swapMode==='swap'?'Send Swap Request':'Broadcast to All';}
+  }
+}
+
+// ============================================================
+// FIX: acceptGive — clear feedback + error handling
+// ============================================================
+async function acceptGive(swapId){
+  const r=(DATA.swaps||{})[swapId]; if(!r) return;
+  const btn=event?.target; if(btn){btn.disabled=true;btn.textContent='Accepting…';}
+  try{
+    const shift=(DATA.shifts||{})[r.shiftId];
+    if(shift){
+      const a=[...(shift.assigned||[])].filter(id=>id!==r.from);
+      if(!a.includes(L.user.id)) a.push(L.user.id);
+      await fbUpdate(`shifts/${r.shiftId}`,{assigned:a});
+    }
+    await fbUpdate(`swaps/${swapId}`,{status:'completed'});
+    for(const [sid,s] of Object.entries(DATA.swaps||{})){
+      if(s.type==='give'&&s.shiftId===r.shiftId&&sid!==swapId&&s.status==='broadcast')
+        await fbUpdate(`swaps/${sid}`,{status:'cancelled'});
+    }
+    await logEvent('give_accepted',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} accepted a shift from ${gName(r.from)}`,{});
+    toast('✓ Shift accepted! It's now on your schedule.');
+  } catch(e){
+    console.error('acceptGive failed:',e);
+    toast('Failed — check your connection','err');
+    if(btn){btn.disabled=false;btn.textContent='✓ Accept';}
+  }
+}
+
+// ============================================================
+// FIX: acceptSwap — clear feedback + error handling
+// ============================================================
+async function acceptSwap(swapId){
+  const r=(DATA.swaps||{})[swapId]; if(!r) return;
+  const btn=event?.target; if(btn){btn.disabled=true;btn.textContent='Accepting…';}
+  try{
+    const sh1=(DATA.shifts||{})[r.shiftId];
+    if(sh1){
+      const a=[...(sh1.assigned||[])];
+      const fi=a.indexOf(r.from);
+      if(fi>=0) a[fi]=r.to; else if(!a.includes(r.to)) a.push(r.to);
+      await fbUpdate(`shifts/${r.shiftId}`,{assigned:a});
+    }
+    await fbUpdate(`swaps/${swapId}`,{status:'completed'});
+    await logEvent('swap_accepted',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} accepted a swap with ${gName(r.from)}`,{});
+    toast('✓ Swap accepted! Both schedules have been updated.');
+  } catch(e){
+    console.error('acceptSwap failed:',e);
+    toast('Failed — check your connection','err');
+    if(btn){btn.disabled=false;btn.textContent='✓ Accept Swap';}
+  }
+}
+
+// ============================================================
+// FIX: declineSwap — clear feedback + error handling
+// ============================================================
+async function declineSwap(swapId){
+  const btn=event?.target; if(btn){btn.disabled=true;btn.textContent='Declining…';}
+  try{
+    await fbUpdate(`swaps/${swapId}`,{status:'declined'});
+    await logEvent('swap_declined',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} declined a swap/give request`,{});
+    toast('Request declined.');
+  } catch(e){
+    console.error('declineSwap failed:',e);
+    toast('Failed — check your connection','err');
+    if(btn){btn.disabled=false;btn.textContent='✕ Decline';}
+  }
+}
+
+// ============================================================
+// FIX: submitTimeOff — validation + clear confirmation
+// ============================================================
+async function submitTimeOff(){
+  const from=getVal('g-to-from'), to=getVal('g-to-to'), reason=getVal('g-to-reason').trim();
+  const todayDS=toDS(new Date());
+  if(!from||!to){ toast('Select both dates','err'); return; }
+  if(from<todayDS){ toast('Cannot request time off for dates in the past','err'); return; }
+  if(to<from){ toast('End date must be after start date','err'); return; }
+  const id=newKey();
+  try{
+    await fbSet(`timeOff/${id}`,{id,guardId:L.user.id,from,to,reason,status:'pending'});
+    await logEvent('time_off_request',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} requested time off: ${from===to?from:from+' → '+to}`,{});
+    setVal('g-to-from',''); setVal('g-to-to',''); setVal('g-to-reason','');
+    toast('✓ Time off request submitted! Your manager will review it.');
+  } catch(e){
+    console.error('submitTimeOff failed:',e);
+    toast('Failed to submit — check your connection','err');
+  }
+}
+
+// ============================================================
+// FIX: openSickModal — hide button if no shifts today
+// ============================================================
+function openSickModal(){
+  const today=toDS(new Date());
+  const mine=shiftsList().filter(s=>s.date===today&&(s.assigned||[]).includes(L.user?.id));
+  if(!mine.length){
+    toast('You have no shifts today — no alert needed','warn');
+    return;
+  }
+  const sel=el('sick-sel'); if(!sel) return;
+  sel.innerHTML=mine.map(s=>`<option value="${s.id}">Today ${fmt12(s.start)}–${fmt12(s.end)}</option>`).join('');
+  openOv('ov-sick');
+}
+
+// ============================================================
+// FIX: saveGuardCode — clear close + confirmation
+// ============================================================
+async function saveGuardCode(){
+  const guardId=getVal('editcode-guard-id'), code=getVal('editcode-val').trim();
+  if(code&&!/^\d{4}$/.test(code)){ toast('Code must be exactly 4 digits','err'); return; }
+  const btn=document.querySelector('#ov-editcode .btn-primary');
+  if(btn){btn.disabled=true;btn.textContent='Saving…';}
+  try{
+    await fbSet(`guards/${guardId}/personalCode`,code||null);
+    await logEvent('guard_added','Manager',`Access code updated for ${gName(guardId)}`,{});
+    closeOv('ov-editcode');
+    toast(code?`✓ Personal code set for ${gName(guardId)}`:`✓ ${gName(guardId)} will use shared code`);
+  } catch(e){
+    console.error('saveGuardCode failed:',e);
+    toast('Failed to save — check connection','err');
+  } finally {
+    if(btn){btn.disabled=false;btn.textContent='Save Code';}
+  }
+}
+
+// ============================================================
+// FIX: openWeekGlance — force render then open
+// ============================================================
+function openWeekGlance(){
+  if(!_weekStart) _weekStart=getMonday(new Date());
+  const minDate=new Date(2026,Math.min(...SEASON),1);
+  const maxDate=new Date(2026,Math.max(...SEASON)+1,0);
+  if(_weekStart<getMonday(minDate)) _weekStart=getMonday(minDate);
+  if(_weekStart>maxDate) _weekStart=getMonday(maxDate);
+  // Force render BEFORE opening overlay so content is visible
+  renderWeekView();
+  const ov=el('ov-week');
+  if(!ov){ toast('Week view unavailable','err'); return; }
+  ov.classList.add('open');
+}
+
+// ============================================================
+// FIX: mountGuard — render My Shifts + hide sick btn if no shift
+// ============================================================
+function mountGuard(first,last){
+  hide('loading-screen'); hide('login-screen'); hide('mgr-app');
+  show('guard-app','flex');
+  setText('g-hdr-name',first);
+  setText('g-greeting',`HEY, ${first.toUpperCase()}!`);
+  setText('g-date',new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}));
+  setText('g-dd-name',`${first} ${last}`);
+  const av=el('g-avatar'); if(av) av.textContent=first[0].toUpperCase();
+  renderNextShift(); renderTimesheet(); renderSwaps(); renderGuardTimeOff(); renderGuardCal();
+  // Check sick button visibility
+  updateSickButton();
+  gNav('home');
+}
+
+function updateSickButton(){
+  const today=toDS(new Date());
+  const hasShiftToday=shiftsList().some(s=>s.date===today&&(s.assigned||[]).includes(L.user?.id));
+  const sickBtn=document.querySelector('button[onclick="openSickModal()"]');
+  if(sickBtn){
+    sickBtn.style.opacity=hasShiftToday?'1':'0.4';
+    sickBtn.title=hasShiftToday?'':'No shifts today';
+  }
+}
+
 
 // ── BOOT ──────────────────────────────────────────────────────
 async function boot(){
