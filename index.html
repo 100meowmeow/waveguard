@@ -385,10 +385,7 @@ select option{background:#0e2030;}
 @keyframes spin{to{transform:rotate(360deg);}}
 .loading-status{font-size:.8rem;color:#7a95a8;text-align:center;}
 </style>
-<!-- Firebase Compat SDK — gstatic is reliable from browsers -->
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
+
 </head>
 <body>
 <div id="app">
@@ -2320,28 +2317,57 @@ function boot(){
 // ── FIREBASE INIT ─────────────────────────────────────────────
 function initFirebase(){
   const statusEl=el('loading-status');
-  let attempts=0;
-  function tryConnect(){
-    attempts++;
-    if(statusEl) statusEl.textContent=attempts>1?`Connecting… (${attempts})`:'Connecting…';
-    if(typeof firebase==='undefined'){
-      if(attempts<25){ setTimeout(tryConnect,400); return; }
-      showConnectError(); return;
+  if(statusEl) statusEl.textContent='Connecting…';
+
+  // Dynamically load Firebase SDK — avoids ALL head script timing issues
+  function loadScript(src){
+    return new Promise((resolve,reject)=>{
+      const s=document.createElement('script');
+      s.src=src;
+      s.onload=resolve;
+      s.onerror=reject;
+      document.head.appendChild(s);
+    });
+  }
+
+  const FIREBASE_VERSION='10.12.0';
+  const CDN=`https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}`;
+  const FALLBACK_CDN=`https://cdn.jsdelivr.net/npm/firebase@${FIREBASE_VERSION}`;
+
+  async function tryLoad(){
+    // Try primary CDN (gstatic)
+    try{
+      await loadScript(`${CDN}/firebase-app-compat.js`);
+      await loadScript(`${CDN}/firebase-database-compat.js`);
+      console.log('✅ Firebase SDK loaded from gstatic');
+    } catch(e1){
+      console.warn('gstatic failed, trying jsdelivr…',e1);
+      if(statusEl) statusEl.textContent='Trying backup connection…';
+      try{
+        await loadScript(`${FALLBACK_CDN}/firebase-app-compat.min.js`);
+        await loadScript(`${FALLBACK_CDN}/firebase-database-compat.min.js`);
+        console.log('✅ Firebase SDK loaded from jsdelivr');
+      } catch(e2){
+        console.error('Both CDNs failed',e2);
+        showConnectError(); return;
+      }
     }
+
+    // SDK is now definitely loaded — initialize
     try{
       if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
       db=firebase.database();
-      console.log('✅ Firebase ready after',attempts,'attempt(s)');
+      console.log('✅ Firebase connected');
       hide('loading-screen');
       show('login-screen','flex');
       boot();
-    }catch(e){
-      console.error('Firebase init error:',e);
-      if(attempts<25){ setTimeout(tryConnect,400); return; }
+    } catch(e){
+      console.error('Firebase init error after SDK load:',e);
       showConnectError();
     }
   }
-  tryConnect();
+
+  tryLoad();
 }
 
 function showConnectError(){
@@ -2349,7 +2375,7 @@ function showConnectError(){
   if(ls) ls.innerHTML=`<div style="text-align:center;padding:2rem;font-family:'DM Sans',sans-serif;"><div style="font-size:2.5rem;margin-bottom:.8rem;">🌊</div><div style="font-family:'Bebas Neue',sans-serif;font-size:2.2rem;letter-spacing:3px;color:#2ec4e0;margin-bottom:.5rem;">WaveGuard</div><div style="color:#7a95a8;font-size:.88rem;margin-bottom:1.5rem;line-height:1.7;">Having trouble connecting.<br>Check your internet connection<br>and try again.</div><button onclick="location.reload()" style="background:linear-gradient(135deg,#2ec4e0,#1a8ab0);color:#fff;border:none;border-radius:12px;padding:.9rem 2.2rem;font-size:1rem;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">🔄 Tap to Retry</button></div>`;
 }
 
-window.addEventListener('load',initFirebase);
+document.addEventListener('DOMContentLoaded',initFirebase);
 
 </script>
 </div>
