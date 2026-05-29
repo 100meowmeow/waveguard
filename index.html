@@ -506,16 +506,17 @@ select option{background:#0e2030;}
     </div>
 
     <div class="screen" id="g-screen-swaps">
-      <div class="section-title">SHIFT SWAPS</div>
+      <div class="section-title">SHIFT COVERAGE</div>
       <div class="swap-type-grid">
-        <div class="swap-tc" onclick="openSwapModal('swap')"><div class="swap-tc-icon">🔄</div><div class="swap-tc-title">Swap Shifts</div><div class="swap-tc-sub">Trade your shift for one of theirs</div></div>
-        <div class="swap-tc" onclick="openSwapModal('give')"><div class="swap-tc-icon">📢</div><div class="swap-tc-title">Give Shift Away</div><div class="swap-tc-sub">Broadcast — first to accept wins</div></div>
+        <div class="swap-tc" onclick="openGiveModal(null)"><div class="swap-tc-icon">📢</div><div class="swap-tc-title">Broadcast to All</div><div class="swap-tc-sub">Anyone can accept your shift</div></div>
+        <div class="swap-tc" onclick="openGiveModal('targeted')"><div class="swap-tc-icon">🎯</div><div class="swap-tc-title">Give to Specific Guard</div><div class="swap-tc-sub">They accept or decline</div></div>
       </div>
-      <div class="card-title">INCOMING</div>
-      <div id="g-swaps-in"></div>
-      <div class="card-title" style="margin-top:.85rem;">YOUR REQUESTS</div>
-      <div id="g-swaps-out"></div>
+      <div class="card-title">INCOMING REQUESTS</div>
+      <div id="g-swaps-in"><p class="empty">No incoming requests.</p></div>
+      <div class="card-title" style="margin-top:.8rem;">YOUR OUTGOING</div>
+      <div id="g-swaps-out"><p class="empty">None sent.</p></div>
     </div>
+
     <!-- GUARD TIMESHEET -->
     <div class="screen" id="g-screen-timesheet">
       <div class="section-title">MY HOURS</div>
@@ -702,6 +703,11 @@ select option{background:#0e2030;}
         <button class="btn btn-primary" onclick="saveSettings()" style="margin-top:0">Save</button>
       </div>
       <div class="card">
+        <div class="card-title">CHANGE YOUR MANAGER CODE</div>
+        <div class="fg"><label>New Manager Code (min 4 chars)</label><input type="text" id="new-mgr-code" placeholder="Enter new code"/></div>
+        <button class="btn btn-primary" onclick="saveManagerCode()" style="margin-top:0">Update Code</button>
+      </div>
+      <div class="card">
         <div class="card-title">SEASON MONTHS</div>
         <p style="color:var(--muted);font-size:.78rem;margin-bottom:.75rem;">Add or remove months from the season calendar. June, July, August are always included.</p>
         <div class="chips" id="season-month-chips"></div>
@@ -767,6 +773,7 @@ select option{background:#0e2030;}
     <button class="nav-btn" id="m-nav-log" onclick="mNav('log',this)" style="position:relative"><div class="nav-icon">📋</div><div class="nav-label">Log</div><div class="notif-badge" id="m-notif-badge"></div></button>
     <button class="nav-btn" id="m-nav-payroll" onclick="mNav('payroll',this)"><div class="nav-icon">💵</div><div class="nav-label">Payroll</div></button>
     <button class="nav-btn" id="m-nav-staff" onclick="mNav('staff',this)"><div class="nav-icon">👥</div><div class="nav-label">Staff</div></button>
+    <button class="nav-btn" id="m-nav-week" onclick="openWeekGlance();this.classList.add('active');setTimeout(()=>this.classList.remove('active'),2000)"><div class="nav-icon">📅</div><div class="nav-label">Week</div></button>
   </nav>
 </div>
 
@@ -895,12 +902,13 @@ select option{background:#0e2030;}
 <!-- Swap request modal -->
 <div class="overlay" id="ov-swap">
   <div class="sheet">
-    <div class="sheet-hdr"><div class="sheet-title" id="ov-swap-title">SWAP REQUEST</div><button class="sheet-close" onclick="closeOv('ov-swap')">✕</button></div>
-    <div id="ov-swap-body"></div>
-    <div class="btn-row">
-      <button class="btn btn-primary" id="swap-submit-btn" onclick="sendSwapRequest()" style="margin-top:0">Send</button>
-      <button class="btn btn-ghost" onclick="closeOv('ov-swap')" style="margin-top:0">Cancel</button>
+    <div class="sheet-hdr">
+      <div class="sheet-title" id="ov-swap-title">GIVE SHIFT AWAY</div>
+      <button class="sheet-close" onclick="closeOv('ov-swap')">✕</button>
     </div>
+    <div id="ov-swap-body"></div>
+    <button class="btn btn-primary" id="swap-submit-btn" onclick="sendGiveRequest()" style="margin-top:.5rem;width:100%">Send</button>
+    <button class="btn btn-ghost" onclick="closeOv('ov-swap')" style="margin-top:.4rem;width:100%">Cancel</button>
   </div>
 </div>
 
@@ -1214,6 +1222,25 @@ const addClass = (id,c) => { const e=el(id); if(e) e.classList.add(c); };
 const removeClass = (id,c) => { const e=el(id); if(e) e.classList.remove(c); };
 
 // ── UTILITIES ─────────────────────────────────────────────────
+
+// Fire-and-forget Firebase write — never blocks UI
+function fbBg(path, val, method='PUT'){
+  fetch(`${FB_URL}/${path}.json`,{
+    method, headers:{'Content-Type':'application/json'},
+    body: val===null ? undefined : JSON.stringify(val)
+  }).catch(e=>console.warn('fbBg failed:',path,e));
+}
+function fbBgDelete(path){
+  fetch(`${FB_URL}/${path}.json`,{method:'DELETE'}).catch(e=>console.warn('fbBg delete failed:',path,e));
+}
+function fbBgUpdate(path, val){
+  fbBg(path, val, 'PATCH');
+}
+// Log event without awaiting
+function logBg(type,actor,msg,meta={}){
+  fbBg(`eventLog/${newKey()}`,{id:newKey(),ts:new Date().toISOString(),type,actor,msg,meta});
+}
+
 const guardsList = () => Object.values(DATA.guards||{});
 const shiftsList = () => Object.values(DATA.shifts||{});
 const swapsList  = () => Object.values(DATA.swaps||{});
@@ -1706,40 +1733,40 @@ async function saveShift(){
   const required=parseInt(getVal('sh-req')), note=getVal('sh-note').trim();
   const repeat=getCheck('sh-repeat'), editId=getVal('sh-edit-id');
   if(!date||!start||!end){ toast('Fill in date and times','err'); return; }
-  if(end<=start){ toast('End must be after start','err'); return; }
+  if(end<=start){ toast('End must be after start time','err'); return; }
   if(type==='custom'&&!customType){ toast('Enter a custom type name','err'); return; }
   const shData={date,start,end,arriveTime,type,customType,required,note,assigned:L.assignChipSelected};
   const typeLabel=type==='custom'?customType:(CUSTOM_TYPES.includes(type)?type:(TYPE_LABELS[type]||type));
+  // Close modal and confirm immediately
+  closeOv('ov-shift');
   if(editId){
-    await fbUpdate(`shifts/${editId}`,shData);
-    logEvent('shift_edited','Manager',`Shift edited: ${date} ${fmt12(start)}–${fmt12(end)}`,{});
-    toast('Shift updated!');
+    toast('✓ Shift updated!');
+    fbBgUpdate(`shifts/${editId}`,shData);
+    logBg('shift_edited','Manager',`Shift edited: ${date} ${fmt12(start)}–${fmt12(end)}`,{});
   } else if(repeat){
     const dayChips=document.querySelectorAll('#sh-repeat-days [data-day]');
     const activeDays=new Set([...dayChips].filter(c=>c.classList.contains('on')).map(c=>parseInt(c.dataset.day)));
-    if(!activeDays.size){ toast('Select repeat days','err'); return; }
+    if(!activeDays.size){ toast('Select at least one repeat day','err'); openOv('ov-shift'); return; }
     const endDate=new Date(Math.max(...SEASON.map(m=>new Date(2026,m+1,0).getTime())));
     let cur=new Date(date), added=0;
     while(cur<=endDate){
       if(activeDays.has(cur.getDay())){
         const ds=cur.toISOString().slice(0,10);
         if(!shiftsList().find(s=>s.date===ds&&s.start===start)){
-          const id=newKey();
-          await fbSet(`shifts/${id}`,{...shData,id,date:ds,assigned:[]});
+          fbBg(`shifts/${newKey()}`,{...shData,id:newKey(),date:ds,assigned:[]});
           added++;
         }
       }
       cur.setDate(cur.getDate()+1);
     }
-    logEvent('shift_added','Manager',`${added} repeat ${typeLabel} shifts created`,{});
-    toast(`${added} shifts created!`);
+    toast(`✓ ${added} shifts created!`);
+    logBg('shift_added','Manager',`${added} repeat ${typeLabel} shifts created`,{});
   } else {
     const id=newKey();
-    await fbSet(`shifts/${id}`,{...shData,id});
-    logEvent('shift_added','Manager',`Shift added: ${typeLabel} on ${date}, ${fmt12(start)}–${fmt12(end)}${arriveTime?' (arrive '+fmt12(arriveTime)+')':''}`,{});
-    toast('Shift added!');
+    toast('✓ Shift added!');
+    fbBg(`shifts/${id}`,{...shData,id});
+    logBg('shift_added','Manager',`Shift added: ${typeLabel} on ${date}, ${fmt12(start)}–${fmt12(end)}`,{});
   }
-  closeOv('ov-shift');
 }
 async function delShift(id){
   const sh=(DATA.shifts||{})[id];
@@ -1930,10 +1957,15 @@ function renderWeekView(){
   const sMin=sVals.length?Math.min(...sVals):0;
   const gap=sMax-sMin;
   let disc='', discCls='disc-ok';
+  const topG=sorted.filter(g=>(sc[g.id]||0)===sMax);
+  const botG=sorted.filter(g=>(sc[g.id]||0)===sMin&&sMin<sMax);
+  const topNames=topG.map(g=>g.first+' '+g.last).join(' & ')||'?';
+  const botNames=botG.map(g=>g.first+' '+g.last).join(' & ')||'?';
   if(sMax===0){ disc='No shifts assigned yet.'; discCls='disc-warn'; }
-  else if(gap<=2){ disc=`Shifts are evenly distributed — biggest difference is ${gap} shift${gap!==1?'s':''}.`; }
-  else if(gap<=5){ disc=`${sorted[0]?.first} has the most (${sMax}) and ${sorted[sorted.length-1]?.first} has the fewest (${sMin}). A ${gap}-shift gap — slightly uneven but manageable.`; discCls='disc-warn'; }
-  else{ disc=`${sorted[0]?.first} has ${sMax} shifts while ${sorted[sorted.length-1]?.first} only has ${sMin} — a ${gap}-shift gap. Consider running Auto-Schedule again or reassigning manually.`; discCls='disc-bad'; }
+  else if(gap<=1){ disc='Shifts are evenly distributed.'; discCls='disc-ok'; }
+  else if(gap<=4){ disc=topNames+(topG.length>1?' have':' has')+` the most (${sMax}) and `+botNames+(botG.length>1?' have':' has')+` the fewest (${sMin}). A ${gap}-shift gap.`; discCls='disc-warn'; }
+  else{ disc=topNames+(topG.length>1?' have':' has')+` ${sMax} shifts while `+botNames+` only have ${sMin} — run Auto-Schedule or reassign.`; discCls='disc-bad'; }
+
   let gHTML=`<div class="discrepancy-box ${discCls}">${disc}</div>`;
   gHTML+=sorted.map(g=>{const cnt=sc[g.id]||0,pct=Math.round(cnt/sMax*100),low=cnt===sMin&&gap>3;return`<div class="stat-row"><div class="stat-name">${g.first} ${g.last}</div><div class="stat-bar-wrap"><div class="stat-bar${low?' warn-bar':''}" style="width:${pct}%"></div></div><div class="stat-count${low?' stat-warn':''}">${cnt} shift${cnt!==1?'s':''}</div></div>`;}).join('');
   const bk=guards.filter(g=>g.type==='backup');
@@ -1952,29 +1984,36 @@ function renderNextShift(){
 
 // ── CLOCK IN/OUT ──────────────────────────────────────────────
 function clockIn(){
-  if(L.clockedIn) return;
+  if(L.clockedIn){ toast('Already clocked in','warn'); return; }
+  // Check guard has a shift today
+  const today=toDS(new Date());
+  const hasShift=shiftsList().some(s=>s.date===today&&(s.assigned||[]).includes(L.user?.id));
+  if(!hasShift){ toast('You have no shift scheduled today','err'); return; }
   L.clockedIn=true; L.clockInTime=new Date();
   hide('g-btn-ci'); show('g-btn-co');
   const sb=el('g-clock-status'); if(sb) sb.className='status-bar sb-in';
-  const txt=el('g-clock-txt'); if(txt) txt.textContent=`Clocked in at ${L.clockInTime.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`;
+  const ci=L.clockInTime.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  const txt=el('g-clock-txt'); if(txt) txt.textContent=`Clocked in at ${ci}`;
   const dot=sb?.querySelector('.dot'); if(dot) dot.classList.add('pulse');
-  if(L.user) logEvent('clock_in',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} clocked in`,{});
   toast('Clocked in ✓');
+  logBg('clock_in',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} clocked in`,{});
 }
-async function clockOut(){
-  if(!L.clockedIn) return;
+function clockOut(){
+  if(!L.clockedIn){ toast('Not clocked in','err'); return; }
   const out=new Date(), hrs=parseFloat(((out-L.clockInTime)/3600000).toFixed(2));
   const inStr=L.clockInTime.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
   const outStr=out.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
   const date=toDS(new Date());
-  await fbSet(`allTsLog/${newKey()}`,{guardId:L.user.id,date,in:inStr,out:outStr,hrs,isAdjustment:false});
+  // Update UI immediately — no waiting for Firebase
   L.clockedIn=false; L.clockInTime=null;
   show('g-btn-ci'); hide('g-btn-co');
   const sb=el('g-clock-status'); if(sb) sb.className='status-bar sb-out';
   const txt=el('g-clock-txt'); if(txt) txt.textContent='Not clocked in';
   const dot=sb?.querySelector('.dot'); if(dot) dot.classList.remove('pulse');
-  if(L.user) logEvent('clock_out',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} clocked out after ${hrs} hrs`,{hrs});
   toast(`Clocked out — ${hrs} hrs logged`);
+  // Write to Firebase in background
+  fbBg(`allTsLog/${newKey()}`,{guardId:L.user.id,date,in:inStr,out:outStr,hrs,isAdjustment:false});
+  logBg('clock_out',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} clocked out after ${hrs} hrs`,{hrs});
 }
 
 // ── TIMESHEET ─────────────────────────────────────────────────
@@ -2016,34 +2055,186 @@ async function sendClosure(){
   toast('⚠️ Pool closure alert sent!');
 }
 
-async function renderSwaps(){
+
+
+// ============================================================
+// GIVE-AWAY SYSTEM (replaces swaps)
+// ============================================================
+function openGiveModal(mode){
+  // mode=null → broadcast to all, mode='targeted' → pick specific guard
+  const isTargeted = mode==='targeted';
+  setText('ov-swap-title', isTargeted?'GIVE TO SPECIFIC GUARD':'BROADCAST TO ALL');
+  const today=toDS(new Date());
+  const myShifts=shiftsList().filter(s=>s.date>=today&&(s.assigned||[]).includes(L.user?.id));
+  if(!myShifts.length){
+    toast('You have no upcoming shifts to give away','err'); return;
+  }
+  const opts=myShifts.map(s=>`<option value="${s.id}">${fmtShort(s.date)} · ${fmt12(s.start)}–${fmt12(s.end)}</option>`).join('');
+  let html=`<div class="fg"><label>Shift to give away</label><select id="sw-myshift" onchange="checkGiveDuplicate(this.value,'${mode}')">${opts}</select></div>`;
+  if(isTargeted){
+    const others=guardsList().filter(g=>g.id!==L.user?.id&&g.type!=='backup');
+    html+=`<div class="fg"><label>Give to</label><select id="sw-target">${others.map(g=>`<option value="${g.id}">${g.first} ${g.last}</option>`).join('')}</select></div>`;
+    html+=`<div class="info-box">They will get a notification and can accept or decline.</div>`;
+  } else {
+    const shift=(DATA.shifts||{})[myShifts[0]?.id];
+    const avail=shift?Object.values(DATA.availMap||{}).filter(e=>e.date===shift.date&&e.guardId!==L.user.id).map(e=>gName(e.guardId)).filter(Boolean):[];
+    html+=avail.length?`<div class="info-box">✓ Available on this day: <strong>${avail.join(', ')}</strong></div>`:`<div class="info-box">All guards will be notified. First to accept gets the shift.</div>`;
+  }
+  html+=`<div class="fg"><label>Message (optional)</label><input type="text" id="sw-msg" placeholder="e.g. Family obligation"/></div>`;
+  html+=`<div id="sw-dup-warn" class="warn-box" style="display:none"></div>`;
+  setHTML('ov-swap-body', html);
+  L.swapMode=mode;
+  const btn=el('swap-submit-btn');
+  if(btn) btn.textContent=isTargeted?'Send Request':'Broadcast to All';
+  checkGiveDuplicate(myShifts[0]?.id, mode);
+  openOv('ov-swap');
+}
+
+function checkGiveDuplicate(shiftId, mode){
+  const warn=el('sw-dup-warn'); const btn=el('swap-submit-btn');
+  if(!warn||!shiftId) return;
+  // Check if already gave this shift away (pending or broadcast)
+  const existing=swapsList().find(s=>
+    s.from===L.user?.id && s.shiftId===shiftId &&
+    ['pending','broadcast'].includes(s.status)
+  );
+  if(existing){
+    warn.textContent='⚠️ You already sent a request for this shift. Cancel it first.';
+    warn.style.display='block';
+    if(btn) btn.disabled=true;
+  } else {
+    warn.style.display='none';
+    if(btn) btn.disabled=false;
+  }
+}
+
+function sendGiveRequest(){
+  const shiftId=getVal('sw-myshift');
+  const msg=getVal('sw-msg');
+  const isTargeted=L.swapMode==='targeted';
+  if(!shiftId){ toast('Select a shift','err'); return; }
+  // Duplicate check
+  const dup=swapsList().find(s=>s.from===L.user?.id&&s.shiftId===shiftId&&['pending','broadcast'].includes(s.status));
+  if(dup){ toast('Already sent a request for this shift','err'); return; }
+  const shift=(DATA.shifts||{})[shiftId];
+  const desc=shift?`${fmtShort(shift.date)} ${fmt12(shift.start)}–${fmt12(shift.end)}`:'your shift';
+  const id=newKey();
+  if(isTargeted){
+    const toId=getVal('sw-target');
+    if(!toId){ toast('Select a guard','err'); return; }
+    // Check if already sent to this specific guard
+    const dupTargeted=swapsList().find(s=>s.from===L.user?.id&&s.shiftId===shiftId&&s.to===toId&&s.status==='pending');
+    if(dupTargeted){ toast('Already sent to this guard for this shift','err'); return; }
+    closeOv('ov-swap');
+    toast(`✓ Request sent to ${gName(toId)}!`);
+    const entry={id,type:'give',from:L.user.id,to:toId,shiftId,message:msg,status:'pending'};
+    DATA.swaps=DATA.swaps||{}; DATA.swaps[id]=entry;
+    renderSwaps();
+    fbBg(`swaps/${id}`,entry);
+    logBg('give_request',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} offered their shift to ${gName(toId)}`,{shiftId});
+  } else {
+    closeOv('ov-swap');
+    toast('📢 Broadcast sent! Everyone has been notified.');
+    const entry={id,type:'give',from:L.user.id,to:null,shiftId,message:msg,status:'broadcast'};
+    DATA.swaps=DATA.swaps||{}; DATA.swaps[id]=entry;
+    renderSwaps();
+    fbBg(`swaps/${id}`,entry);
+    logBg('give_request',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} broadcast a shift give-away`,{shiftId});
+    postGroupMe(`📢 SHIFT AVAILABLE!\n${L.user.first} ${L.user.last} is giving away:\n📅 ${desc}\nFirst to accept in WaveGuard gets it!`);
+  }
+}
+
+function renderSwaps(){
   const inEl=el('g-swaps-in'), outEl=el('g-swaps-out'); if(!inEl||!outEl) return;
   const myId=L.user?.id;
-  const incoming=swapsList().filter(r=>(r.type==='give'&&r.status==='broadcast'&&r.from!==myId)||(r.to===myId&&r.status==='pending'));
-  const outgoing=swapsList().filter(r=>r.from===myId&&['pending','broadcast'].includes(r.status));
-  inEl.innerHTML=incoming.length?incoming.map(r=>swapCardHTML(r,'in')).join(''):'<p class="empty">No incoming requests.</p>';
-  outEl.innerHTML=outgoing.length?outgoing.map(r=>swapCardHTML(r,'out')).join(''):'<p class="empty">No outgoing requests.</p>';
+  // Incoming: broadcasts from others, or targeted to me
+  const incoming=swapsList().filter(r=>
+    r.status!=='declined'&&r.status!=='completed'&&r.status!=='cancelled'&&
+    ((r.type==='give'&&r.status==='broadcast'&&r.from!==myId)||
+     (r.to===myId&&r.status==='pending'))
+  );
+  // Outgoing: things I sent
+  const outgoing=swapsList().filter(r=>
+    r.from===myId&&['pending','broadcast'].includes(r.status)
+  );
+  inEl.innerHTML=incoming.length?incoming.map(r=>giveCardHTML(r,'in')).join(''):'<p class="empty">No incoming requests.</p>';
+  outEl.innerHTML=outgoing.length?outgoing.map(r=>giveCardHTML(r,'out')).join(''):'<p class="empty">Nothing sent.</p>';
 }
-function swapCardHTML(r,dir){
-  const fromG=(DATA.guards||{})[r.from], shift=(DATA.shifts||{})[r.shiftId];
-  const badge=r.type==='give'?`<span class="badge b-yellow">📢 Give Away</span>`:`<span class="badge b-blue">🔄 Swap</span>`;
+
+function giveCardHTML(r,dir){
+  const fromG=(DATA.guards||{})[r.from];
+  const shift=(DATA.shifts||{})[r.shiftId];
+  const shiftDesc=shift?`${fmtShort(shift.date)} · ${fmt12(shift.start)}–${fmt12(shift.end)}`:'—';
+  const badge=r.status==='broadcast'?'<span class="badge b-yellow">📢 Broadcast</span>':'<span class="badge b-blue">🎯 Targeted</span>';
   let h=`<div class="swap-card">${badge}`;
   if(dir==='in'){
-    h+=`<div class="sw-head">${r.type==='give'?(fromG?.first||'?')+' is giving away a shift':(fromG?.first||'?')+' wants to swap with you'}</div>`;
-    h+=`<div class="sw-detail">${shift?`${fmtShort(shift.date)} · ${fmt12(shift.start)}–${fmt12(shift.end)}`:'—'}</div>`;
+    h+=`<div class="sw-head">${fromG?fromG.first+' '+fromG.last:'?'} is giving away a shift</div>`;
+    h+=`<div class="sw-detail">${shiftDesc}</div>`;
     if(r.message) h+=`<div class="sw-msg">"${r.message}"</div>`;
-    h+=`<div class="sw-actions">`;
-    h+=r.type==='give'?`<button class="btn btn-sm btn-green" onclick="acceptGive('${r.id}')">✓ Accept</button>`:`<button class="btn btn-sm btn-green" onclick="acceptSwap('${r.id}')">✓ Accept Swap</button>`;
-    h+=`<button class="btn btn-sm btn-danger" onclick="declineSwap('${r.id}')">✕ Decline</button></div>`;
+    h+=`<div class="sw-actions">
+      <button class="btn btn-sm btn-green" onclick="acceptGive('${r.id}')">✓ Accept Shift</button>
+      <button class="btn btn-sm btn-danger" onclick="declineGive('${r.id}')">✕ Decline</button>
+    </div>`;
   } else {
-    const toG=(DATA.guards||{})[r.to];
-    h+=`<div class="sw-head">${r.type==='give'?'You broadcast a give-away':`Swap request → ${toG?toG.first:'?'}`}</div>`;
-    h+=`<div class="sw-detail">${shift?`${fmtShort(shift.date)} · ${fmt12(shift.start)}–${fmt12(shift.end)}`:'—'}</div>`;
-    h+=`<span class="badge b-gray">${r.type==='give'?'📢 Broadcast':'⏳ Waiting'}</span>`;
-    h+=`<div class="sw-actions"><button class="btn btn-sm btn-danger" onclick="declineSwap('${r.id}')">Cancel</button></div>`;
+    const toLabel=r.to?`To: ${gName(r.to)}`:'Broadcast to all';
+    h+=`<div class="sw-head">You are giving away a shift</div>`;
+    h+=`<div class="sw-detail">${shiftDesc}</div>`;
+    h+=`<div class="sw-detail" style="color:var(--muted)">${toLabel}</div>`;
+    h+=`<span class="badge b-gray">⏳ Waiting</span>`;
+    h+=`<div class="sw-actions"><button class="btn btn-sm btn-danger" onclick="cancelGive('${r.id}')">Cancel</button></div>`;
   }
   return h+'</div>';
 }
+
+function acceptGive(swapId){
+  const r=(DATA.swaps||{})[swapId]; if(!r) return;
+  // Find and disable the accept button
+  const card=document.querySelector(`[onclick*="${swapId}"]`)?.closest('.swap-card');
+  if(card){ const btns=card.querySelectorAll('button'); btns.forEach(b=>{b.disabled=true;}); }
+  // Optimistic: update local state immediately
+  const shift=DATA.shifts[r.shiftId];
+  if(shift){
+    const a=[...(shift.assigned||[])].filter(id=>id!==r.from);
+    if(!a.includes(L.user.id)) a.push(L.user.id);
+    DATA.shifts[r.shiftId]={...shift,assigned:a};
+  }
+  // Mark this swap completed, cancel other broadcasts for same shift
+  DATA.swaps[swapId]={...r,status:'completed'};
+  Object.entries(DATA.swaps||{}).forEach(([sid,s])=>{
+    if(s.type==='give'&&s.shiftId===r.shiftId&&sid!==swapId&&['broadcast','pending'].includes(s.status))
+      DATA.swaps[sid]={...s,status:'cancelled'};
+  });
+  refreshCals(); renderSwaps(); renderNextShift(); renderMyShifts();
+  toast('✓ Shift accepted! It is now on your schedule.');
+  // Write to Firebase in background
+  fbBg(`shifts/${r.shiftId}/assigned`,DATA.shifts[r.shiftId]?.assigned||[]);
+  fbBgUpdate(`swaps/${swapId}`,{status:'completed'});
+  Object.entries(DATA.swaps||{}).forEach(([sid,s])=>{
+    if(s.status==='cancelled'&&sid!==swapId) fbBgUpdate(`swaps/${sid}`,{status:'cancelled'});
+  });
+  logBg('give_accepted',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} accepted a shift from ${gName(r.from)}`,{});
+}
+
+function declineGive(swapId){
+  const r=(DATA.swaps||{})[swapId]; if(!r) return;
+  DATA.swaps[swapId]={...r,status:'declined'};
+  renderSwaps();
+  toast('Declined.');
+  fbBgUpdate(`swaps/${swapId}`,{status:'declined'});
+  logBg('swap_declined',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} declined a shift`,{});
+}
+
+function cancelGive(swapId){
+  const r=(DATA.swaps||{})[swapId]; if(!r) return;
+  DATA.swaps[swapId]={...r,status:'cancelled'};
+  renderSwaps();
+  toast('Request cancelled.');
+  fbBgUpdate(`swaps/${swapId}`,{status:'cancelled'});
+}
+
+// openSwapModal kept as alias for compatibility
+const openSwapModal = openGiveModal;
+
 // ── TIME OFF — GUARD ──────────────────────────────────────────
 async function renderGuardTimeOff(){
   const e=el('g-timeoff-list'); if(!e) return;
@@ -2075,27 +2266,30 @@ function buildAvailMonth(year,month){
   for(let d=1;d<=days;d++){
     const ds=`${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const key=`${L.user?.id}_${ds}`, isAvail=!!(DATA.availMap||{})[key], isPast=ds<todayDS;
-    cells+=`<div class="cal-cell${isAvail?' selected':''}"
-      ${isPast?'style="cursor:default;opacity:.4;"':`onclick="toggleGuardAvail('${ds}',this)"`}>
-      ${d}${isAvail?'<span style="display:block;font-size:.4rem;color:var(--green)">✓</span>':''}
-    </div>`;
+    const clickAttr=isPast?'':`onclick="toggleGuardAvail('${ds}',this)"`;
+    cells+=`<div class="cal-cell${isAvail?' selected':''}" ${clickAttr} style="${isPast?'cursor:default;opacity:.4;':''}">${d}${isAvail?'<span style="display:block;font-size:.4rem;color:var(--green)">✓</span>':''}</div>`;
   }
-  return`<div class="cal-month" style="margin-bottom:1.2rem;">
-    <div class="cal-month-name">${MONTHS[month]}</div>
-    <div class="cal-grid">${DAY_HDRS.map(h=>`<div class="cal-hdr">${h}</div>`).join('')}${cells}</div>
-  </div>`;
+  return`<div class="cal-month" style="margin-bottom:1.2rem;"><div class="cal-month-name">${MONTHS[month]}</div><div class="cal-grid">${DAY_HDRS.map(h=>`<div class="cal-hdr">${h}</div>`).join('')}${cells}</div></div>`;
 }
-async function toggleGuardAvail(ds,cellEl){
+function toggleGuardAvail(ds,cellEl){
   if(!L.user?.id) return;
   const key=`${L.user.id}_${ds}`;
   if(!DATA.availMap) DATA.availMap={};
   if(!DATA.availMap[key]){
+    // Mark available — update locally first
     DATA.availMap[key]={guardId:L.user.id,date:ds,availableAt:new Date().toISOString()};
-    await fbSet(`availability/${key}`,DATA.availMap[key]);
-    cellEl.classList.add('selected'); toast(`Available ${ds}`);
+    cellEl.classList.add('selected');
+    cellEl.innerHTML=cellEl.textContent+'<span style="display:block;font-size:.4rem;color:var(--green)">✓</span>';
+    toast(`Marked available on ${fmtShort(ds)}`);
+    fbBg(`availability/${key}`,DATA.availMap[key]);
+    logBg('available_to_cover',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} marked available on ${ds}`,{date:ds});
   } else {
-    delete DATA.availMap[key]; await fbDelete(`availability/${key}`);
-    cellEl.classList.remove('selected'); toast('Removed');
+    // Remove availability
+    delete DATA.availMap[key];
+    cellEl.classList.remove('selected');
+    cellEl.innerHTML=ds.slice(8); // just the day number
+    toast('Availability removed');
+    fbBgDelete(`availability/${key}`);
   }
 }
 
@@ -2127,17 +2321,24 @@ function openTOApproval(id){
   </div>`;
   setVal('toa-id',id); openOv('ov-toapprove');
 }
-function doApproveTO(approve){ quickTO(getVal('toa-id'),approve); closeOv('ov-toapprove'); }
-async function quickTO(id,approve){
+function doApproveTO(approve){
+  const id=getVal('toa-id');
   const t=(DATA.timeOff||{})[id]; if(!t) return;
-  await fbUpdate(`timeOff/${id}`,{status:approve?'approved':'denied'});
-  const g=(DATA.guards||{})[t.guardId], nm=g?`${g.first} ${g.last}`:'?';
+  const g=(DATA.guards||{})[t.guardId];
+  const nm=g?`${g.first} ${g.last}`:'Guard';
   const rng=t.from===t.to?t.from:`${t.from} → ${t.to}`;
-  logEvent(approve?'time_off_approved':'time_off_denied','Manager',`Manager ${approve?'approved':'denied'} time off for ${nm}: ${rng}`,{});
+  // Update locally first — request disappears immediately
+  if(DATA.timeOff[id]) DATA.timeOff[id].status=approve?'approved':'denied';
+  closeOv('ov-toapprove');
+  renderMgrTimeOff();
+  toast(approve?`✓ Approved time off for ${nm}`:`✗ Denied time off for ${nm}`);
+  // Write to Firebase in background
+  fbBgUpdate(`timeOff/${id}`,{status:approve?'approved':'denied'});
+  logBg(approve?'time_off_approved':'time_off_denied','Manager',`Manager ${approve?'approved':'denied'} time off for ${nm}: ${rng}`,{});
   if(approve){
     const conflicts=shiftsList().filter(s=>s.date>=t.from&&s.date<=t.to&&(s.assigned||[]).includes(t.guardId));
-    toast(conflicts.length?`✓ Approved — ⚠️ ${nm} is on ${conflicts.length} shift(s) in this range`:'Time off approved ✓','warn');
-  } else { toast('Request denied'); }
+    if(conflicts.length) setTimeout(()=>toast(`⚠️ ${nm} is on ${conflicts.length} shift(s) in this range`,'warn'),1500);
+  }
 }
 async function bulkApproveTO(){
   const pending=toList().filter(t=>t.status==='pending');
@@ -2326,6 +2527,12 @@ function initPayroll(){
   renderPayroll();
 }
 function renderPayroll(){
+  // Fetch fresh timesheet data before rendering
+  const wrap=el('payroll-table-wrap');
+  if(wrap) wrap.innerHTML='<p class="empty" style="text-align:center">Loading…</p>';
+  fbGet('allTsLog').then(v=>{ if(v) DATA.allTsLog=v; _renderPayrollTable(); }).catch(()=>_renderPayrollTable());
+}
+function _renderPayrollTable(){
   const from=getVal('pay-from'), to=getVal('pay-to');
   const wrap=el('payroll-table-wrap'), btns=el('payroll-btns');
   if(!wrap) return;
@@ -2338,7 +2545,7 @@ function renderPayroll(){
   });
   const rows=Object.values(gt).filter(r=>r.entries.length>0);
   const grand=rows.reduce((s,r)=>s+r.total,0);
-  if(!rows.length){ wrap.innerHTML='<p class="empty">No hours logged in this period.</p>'; if(btns) btns.style.display='none'; return; }
+  if(!rows.length){ wrap.innerHTML='<p class="empty">No hours clocked in this period. Guards need to clock in/out for hours to appear here.</p>'; if(btns) btns.style.display='none'; return; }
   let html=`<div style="overflow-x:auto;"><table class="pay-table"><thead><tr><th>Guard</th><th>Shifts</th><th>Hours</th><th>Rate</th><th>Pay</th></tr></thead><tbody>`;
   rows.forEach(r=>{ html+=`<tr><td><strong>${r.guard.first} ${r.guard.last}</strong></td><td>${r.entries.length}</td><td class="td-hrs">${Math.max(0,r.total).toFixed(2)}</td><td>$${rate.toFixed(2)}/hr</td><td class="td-pay">$${(Math.max(0,r.total)*rate).toFixed(2)}</td></tr>`; });
   html+=`</tbody><tfoot><tr><td colspan="2"><strong>TOTAL</strong></td><td class="td-hrs">${Math.max(0,grand).toFixed(2)} hrs</td><td></td><td class="td-pay">$${(Math.max(0,grand)*rate).toFixed(2)}</td></tr></tfoot></table></div>`;
@@ -2497,181 +2704,41 @@ function renderMyShifts(){
 // ============================================================
 // FIX: openSwapModal — only show guard's own shifts; check duplicates
 // ============================================================
-function openSwapModal(mode){
-  L.swapMode=mode;
-  setText('ov-swap-title',mode==='swap'?'REQUEST SWAP':'GIVE SHIFT AWAY');
-  const today=toDS(new Date());
-  // Only show shifts THIS guard is assigned to
-  const myShifts=shiftsList().filter(s=>s.date>=today&&(s.assigned||[]).includes(L.user?.id));
-  const opts=myShifts.length
-    ?myShifts.map(s=>`<option value="${s.id}">${fmtShort(s.date)} · ${fmt12(s.start)}–${fmt12(s.end)}</option>`).join('')
-    :'<option value="">You have no upcoming shifts</option>';
-  let html=`<div class="fg"><label>Your Shift</label><select id="sw-myshift" onchange="onSwapShiftChange(this.value,${mode==='give'})">${opts}</select></div>`;
-  if(mode==='swap'){
-    const others=guardsList().filter(g=>g.id!==L.user?.id);
-    html+=`<div class="fg"><label>Swap with</label><select id="sw-with">${others.map(g=>`<option value="${g.id}">${g.first} ${g.last}${g.type==='backup'?' ⭐':''}</option>`).join('')}</select></div>`;
-    html+=`<div class="info-box" style="margin-top:.3rem;">They can accept or decline. Simple as that.</div>`;
-  } else {
-    const firstShiftId=myShifts[0]?.id;
-    const avail=firstShiftId?Object.values(DATA.availMap||{}).filter(e=>e.date===(DATA.shifts||{})[firstShiftId]?.date).map(e=>gName(e.guardId)).filter(Boolean):[];
-    html+=`<div id="sw-avail-info" class="info-box" style="margin-top:.3rem;">${avail.length?'✓ Available on this day: <strong>'+avail.join(', ')+'</strong>':'Broadcasts to all guards. First to accept wins.'}</div>`;
-  }
-  html+=`<div class="fg"><label>Message (optional)</label><input type="text" id="sw-msg" placeholder="e.g. Doctor appointment"/></div>`;
-  html+=`<div id="sw-dup-warn" class="warn-box" style="display:none;margin-top:.4rem;"></div>`;
-  setHTML('ov-swap-body',html);
-  const btn=el('swap-submit-btn'); if(btn) btn.textContent=mode==='swap'?'Send Swap Request':'Broadcast to All';
-  // Check for duplicates on first shift
-  if(myShifts.length) checkSwapDuplicate(myShifts[0].id,mode);
-  openOv('ov-swap');
-}
 
-function onSwapShiftChange(shiftId,isGive){
-  if(isGive){
-    const shift=(DATA.shifts||{})[shiftId];
-    const avail=shift?Object.values(DATA.availMap||{}).filter(e=>e.date===shift.date).map(e=>gName(e.guardId)).filter(Boolean):[];
-    const info=el('sw-avail-info');
-    if(info) info.innerHTML=avail.length?'✓ Available on this day: <strong>'+avail.join(', ')+'</strong>':'Broadcasts to all guards. First to accept wins.';
-  }
-  checkSwapDuplicate(shiftId,L.swapMode);
-}
 
-function checkSwapDuplicate(shiftId,mode){
-  const warn=el('sw-dup-warn'); if(!warn) return;
-  const existing=swapsList().find(s=>s.from===L.user?.id&&s.shiftId===shiftId&&['pending','broadcast'].includes(s.status));
-  if(existing){
-    warn.textContent=mode==='give'?'⚠️ You already broadcast this shift. Cancel the existing one first.':'⚠️ You already sent a swap request for this shift.';
-    warn.style.display='block';
-    const btn=el('swap-submit-btn'); if(btn) btn.disabled=true;
-  } else {
-    warn.style.display='none';
-    const btn=el('swap-submit-btn'); if(btn) btn.disabled=false;
-  }
-}
 
-// ============================================================
-// FIX: sendSwapRequest — duplicate check + clear feedback
-// ============================================================
-async function sendSwapRequest(){
-  const shiftId=getVal('sw-myshift'), msg=getVal('sw-msg');
-  if(!shiftId||!L.user?.id){ toast('No shift selected','err'); return; }
 
-  // Duplicate check
-  const existing=swapsList().find(s=>s.from===L.user.id&&s.shiftId===shiftId&&['pending','broadcast'].includes(s.status));
-  if(existing){ toast('You already have an active request for this shift','err'); return; }
 
-  const btn=el('swap-submit-btn');
-  if(btn){btn.disabled=true;btn.textContent='Sending…';}
 
-  try{
-    const id=newKey();
-    if(L.swapMode==='swap'){
-      const toId=getVal('sw-with'); if(!toId){ toast('Select a guard','err'); if(btn){btn.disabled=false;btn.textContent='Send Swap Request';} return; }
-      await fbSet(`swaps/${id}`,{id,type:'swap',from:L.user.id,to:toId,shiftId,message:msg,status:'pending'});
-      await logEvent('swap_request',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} requested a swap with ${gName(toId)}`,{shiftId});
-      closeOv('ov-swap');
-      toast('✓ Swap request sent.');
-    } else {
-      await fbSet(`swaps/${id}`,{id,type:'give',from:L.user.id,to:null,shiftId,message:msg,status:'broadcast'});
-      const shift=(DATA.shifts||{})[shiftId];
-      const desc=shift?`${fmtShort(shift.date)} ${fmt12(shift.start)}–${fmt12(shift.end)}`:'your shift';
-      await logEvent('give_request',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} broadcast a give-away for ${desc}`,{shiftId});
-      postGroupMe(`📢 SHIFT AVAILABLE!\n${L.user.first} ${L.user.last} is giving away:\n📅 ${desc}\nFirst to accept in WaveGuard gets it!`);
-      closeOv('ov-swap');
-      toast('📢 Broadcast sent! Everyone has been notified.');
-    }
-  } catch(e){
-    console.error('sendSwapRequest failed:',e);
-    toast('Failed to send — check your connection','err');
-    if(btn){btn.disabled=false;btn.textContent=L.swapMode==='swap'?'Send Swap Request':'Broadcast to All';}
-  }
-}
 
-// ============================================================
-// FIX: acceptGive — clear feedback + error handling
-// ============================================================
-async function acceptGive(swapId){
-  const r=(DATA.swaps||{})[swapId]; if(!r) return;
-  const btn=event?.target; if(btn){btn.disabled=true;btn.textContent='Accepting…';}
-  try{
-    const shift=(DATA.shifts||{})[r.shiftId];
-    if(shift){
-      const a=[...(shift.assigned||[])].filter(id=>id!==r.from);
-      if(!a.includes(L.user.id)) a.push(L.user.id);
-      await fbUpdate(`shifts/${r.shiftId}`,{assigned:a});
-    }
-    await fbUpdate(`swaps/${swapId}`,{status:'completed'});
-    for(const [sid,s] of Object.entries(DATA.swaps||{})){
-      if(s.type==='give'&&s.shiftId===r.shiftId&&sid!==swapId&&s.status==='broadcast')
-        await fbUpdate(`swaps/${sid}`,{status:'cancelled'});
-    }
-    await logEvent('give_accepted',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} accepted a shift from ${gName(r.from)}`,{});
-    toast('✓ Shift accepted! Now on your schedule.');
-  } catch(e){
-    console.error('acceptGive failed:',e);
-    toast('Failed — check your connection','err');
-    if(btn){btn.disabled=false;btn.textContent='✓ Accept';}
-  }
-}
 
-// ============================================================
-// FIX: acceptSwap — clear feedback + error handling
-// ============================================================
-async function acceptSwap(swapId){
-  const r=(DATA.swaps||{})[swapId]; if(!r) return;
-  const btn=event?.target; if(btn){btn.disabled=true;btn.textContent='Accepting…';}
-  try{
-    const sh1=(DATA.shifts||{})[r.shiftId];
-    if(sh1){
-      const a=[...(sh1.assigned||[])];
-      const fi=a.indexOf(r.from);
-      if(fi>=0) a[fi]=r.to; else if(!a.includes(r.to)) a.push(r.to);
-      await fbUpdate(`shifts/${r.shiftId}`,{assigned:a});
-    }
-    await fbUpdate(`swaps/${swapId}`,{status:'completed'});
-    await logEvent('swap_accepted',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} accepted a swap with ${gName(r.from)}`,{});
-    toast('✓ Swap accepted! Both schedules have been updated.');
-  } catch(e){
-    console.error('acceptSwap failed:',e);
-    toast('Failed — check your connection','err');
-    if(btn){btn.disabled=false;btn.textContent='✓ Accept Swap';}
-  }
-}
 
-// ============================================================
-// FIX: declineSwap — clear feedback + error handling
-// ============================================================
-async function declineSwap(swapId){
-  const btn=event?.target; if(btn){btn.disabled=true;btn.textContent='Declining…';}
-  try{
-    await fbUpdate(`swaps/${swapId}`,{status:'declined'});
-    await logEvent('swap_declined',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} declined a swap/give request`,{});
-    toast('Request declined.');
-  } catch(e){
-    console.error('declineSwap failed:',e);
-    toast('Failed — check your connection','err');
-    if(btn){btn.disabled=false;btn.textContent='✕ Decline';}
-  }
-}
+
+
 
 // ============================================================
 // FIX: submitTimeOff — validation + clear confirmation
 // ============================================================
-async function submitTimeOff(){
+function submitTimeOff(){
   const from=getVal('g-to-from'), to=getVal('g-to-to'), reason=getVal('g-to-reason').trim();
   const todayDS=toDS(new Date());
-  if(!from||!to){ toast('Select both dates','err'); return; }
-  if(from<todayDS){ toast('Cannot request time off for dates in the past','err'); return; }
+  if(!from||!to){ toast('Select both a start and end date','err'); return; }
+  if(from<todayDS){ toast('Cannot request time off for past dates','err'); return; }
   if(to<from){ toast('End date must be after start date','err'); return; }
+  // Check for duplicate — same guard, overlapping dates already pending/approved
+  const dup=toList().find(t=>t.guardId===L.user.id&&t.status!=='denied'&&!(to<t.from||from>t.to));
+  if(dup){ toast('You already have a time off request covering those dates','err'); return; }
+  // Reset form immediately and confirm
+  setVal('g-to-from',''); setVal('g-to-to',''); setVal('g-to-reason','');
+  toast('✓ Time off request submitted! Your manager will review it.');
+  // Write in background
   const id=newKey();
-  try{
-    await fbSet(`timeOff/${id}`,{id,guardId:L.user.id,from,to,reason,status:'pending'});
-    await logEvent('time_off_request',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} requested time off: ${from===to?from:from+' → '+to}`,{});
-    setVal('g-to-from',''); setVal('g-to-to',''); setVal('g-to-reason','');
-    toast('✓ Time off request submitted! Your manager will review it.');
-  } catch(e){
-    console.error('submitTimeOff failed:',e);
-    toast('Failed to submit — check your connection','err');
-  }
+  const entry={id,guardId:L.user.id,from,to,reason,status:'pending'};
+  DATA.timeOff=DATA.timeOff||{};
+  DATA.timeOff[id]=entry;
+  renderGuardTimeOff();
+  fbBg(`timeOff/${id}`,entry);
+  logBg('time_off_request',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} requested time off: ${from===to?from:from+' → '+to}`,{});
 }
 
 // ============================================================
@@ -2692,22 +2759,33 @@ function openSickModal(){
 // ============================================================
 // FIX: saveGuardCode — clear close + confirmation
 // ============================================================
-async function saveGuardCode(){
-  const guardId=getVal('editcode-guard-id'), code=getVal('editcode-val').trim();
+
+function saveManagerCode(){
+  const newCode=getVal('new-mgr-code').trim();
+  if(newCode.length<4){ toast('Code must be at least 4 characters','err'); return; }
+  if(newCode===DATA.config?.guardCode){ toast('Manager code cannot match guard code','err'); return; }
+  DATA.config.managerCode=newCode;
+  try{ const s=localStorage.getItem('wg_config'); if(s){ const c=JSON.parse(s); c.managerCode=newCode; localStorage.setItem('wg_config',JSON.stringify(c)); }}catch(e){}
+  toast('✓ Manager code updated!');
+  setVal('new-mgr-code','');
+  fbBgUpdate('config',{managerCode:newCode});
+  logBg('guard_added','Manager','Manager updated their own access code',{});
+}
+
+function saveGuardCode(){
+  const guardId=getVal('editcode-guard-id');
+  const code=getVal('editcode-val').trim();
+  // Get name from the modal display (not from DATA.guards which may be stale)
+  const nameEl=el('editcode-name');
+  const guardName=nameEl?nameEl.textContent:gName(guardId);
   if(code&&!/^\d{4}$/.test(code)){ toast('Code must be exactly 4 digits','err'); return; }
-  const btn=document.querySelector('#ov-editcode .btn-primary');
-  if(btn){btn.disabled=true;btn.textContent='Saving…';}
-  try{
-    await fbSet(`guards/${guardId}/personalCode`,code||null);
-    await logEvent('guard_added','Manager',`Access code updated for ${gName(guardId)}`,{});
-    closeOv('ov-editcode');
-    toast(code?`✓ Personal code set for ${gName(guardId)}`:`✓ ${gName(guardId)} will use shared code`);
-  } catch(e){
-    console.error('saveGuardCode failed:',e);
-    toast('Failed to save — check connection','err');
-  } finally {
-    if(btn){btn.disabled=false;btn.textContent='Save Code';}
-  }
+  // Update immediately — no waiting
+  if(DATA.guards[guardId]) DATA.guards[guardId].personalCode=code||null;
+  closeOv('ov-editcode');
+  toast(code?`✓ Code set for ${guardName}`:`✓ ${guardName} will use shared code`);
+  // Write to Firebase in background
+  fbBg(`guards/${guardId}/personalCode`,code||null);
+  logBg('guard_added','Manager',`Code updated for ${guardName}`,{});
 }
 
 // ============================================================
