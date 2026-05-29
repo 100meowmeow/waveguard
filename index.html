@@ -2248,7 +2248,6 @@ function openEditCode(guardId){
   const shared=el('editcode-shared'); if(shared) shared.textContent=DATA.config?.guardCode||'(not set)';
   openOv('ov-editcode');
 }
-async 
 // ── GUARD PROFILE ─────────────────────────────────────────────
 function openProfile(guardId){
   const g=(DATA.guards||{})[guardId]; if(!g) return;
