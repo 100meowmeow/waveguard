@@ -2044,7 +2044,6 @@ function swapCardHTML(r,dir){
   }
   return h+'</div>';
 }
-async async async 
 // ── TIME OFF — GUARD ──────────────────────────────────────────
 async function renderGuardTimeOff(){
   const e=el('g-timeoff-list'); if(!e) return;
@@ -2571,7 +2570,7 @@ async function sendSwapRequest(){
       await fbSet(`swaps/${id}`,{id,type:'swap',from:L.user.id,to:toId,shiftId,message:msg,status:'pending'});
       await logEvent('swap_request',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} requested a swap with ${gName(toId)}`,{shiftId});
       closeOv('ov-swap');
-      toast('✓ Swap request sent! They'll be notified.');
+      toast('✓ Swap request sent.');
     } else {
       await fbSet(`swaps/${id}`,{id,type:'give',from:L.user.id,to:null,shiftId,message:msg,status:'broadcast'});
       const shift=(DATA.shifts||{})[shiftId];
@@ -2607,7 +2606,7 @@ async function acceptGive(swapId){
         await fbUpdate(`swaps/${sid}`,{status:'cancelled'});
     }
     await logEvent('give_accepted',`${L.user.first} ${L.user.last}`,`${L.user.first} ${L.user.last} accepted a shift from ${gName(r.from)}`,{});
-    toast('✓ Shift accepted! It's now on your schedule.');
+    toast('✓ Shift accepted! Now on your schedule.');
   } catch(e){
     console.error('acceptGive failed:',e);
     toast('Failed — check your connection','err');
