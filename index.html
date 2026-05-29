@@ -598,13 +598,13 @@ select option{background:#0e2030;}
     <div class="screen active" id="m-screen-home">
       <div class="greeting"><h1 id="m-greeting">MANAGER</h1><p id="m-date"></p></div>
       <div class="quick-grid">
-        <div class="qc" onclick="mNav('calendar')"><div class="qc-icon">📅</div>
-        <div class="qc" onclick="openWeekGlance()"><div class="qc-icon">📊</div><div class="qc-label">Schedule</div></div>
+        <div class="qc" onclick="mNav('calendar')"><div class="qc-icon">📅</div><div class="qc-label">Schedule</div></div>
+        <div class="qc" onclick="openWeekGlance()"><div class="qc-icon">📊</div><div class="qc-label">Week View</div></div>
         <div class="qc" onclick="mNav('timeoff')"><div class="qc-icon">🗓</div><div class="qc-label">Time Off</div></div>
         <div class="qc" onclick="mNav('log')"><div class="qc-icon">📋</div><div class="qc-label">Event Log</div></div>
         <div class="qc" onclick="mNav('payroll')"><div class="qc-icon">💵</div><div class="qc-label">Payroll</div></div>
-        <div class="qc" onclick="openWeekGlance()"><div class="qc-icon">📊</div><div class="qc-label">Week View</div></div>
         <div class="qc" onclick="mNav('staff')"><div class="qc-icon">👥</div><div class="qc-label">Staff</div></div>
+        <div class="qc" onclick="openAutoSchedule()"><div class="qc-icon">⚡</div><div class="qc-label">Auto-Schedule</div></div>
         <div class="qc" onclick="mNav('settings')"><div class="qc-icon">⚙️</div><div class="qc-label">Settings</div></div>
       </div>
       <button class="big-btn yellow-btn" onclick="openClosureModal()">
@@ -1066,7 +1066,7 @@ select option{background:#0e2030;}
   </div>
 </div>
 </div>
-</div>
+
 
 <script>
 'use strict';
