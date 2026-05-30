@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- WaveGuard v2026-05-29 02:58 -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -410,6 +411,7 @@ select option{background:#0e2030;}
   <div class="loading-spinner"></div>
   <div class="loading-logo">WaveGuard</div>
   <div class="loading-sub">Lifeguard Scheduling</div>
+  <div style="position:absolute;bottom:1rem;font-size:.6rem;color:rgba(255,255,255,.3);font-family:monospace">v2026-05-29 02:58</div>
   <div class="loading-status" id="loading-status">Connecting…</div>
 </div>
 
@@ -2683,7 +2685,8 @@ function printSchedule(){
   }).join('');
   const win=window.open('','_blank');
   if(!win){ toast('Allow pop-ups to print','err'); return; }
-  win.document.write(`<!DOCTYPE html><html><head><title>WaveGuard Season 2026</title>
+  win.document.write(`<!DOCTYPE html>
+<!-- WaveGuard v2026-05-29 02:58 --><html><head><title>WaveGuard Season 2026</title>
     <style>body{font-family:sans-serif;padding:2rem;max-width:800px;margin:0 auto;}h1{text-align:center;}.sub{text-align:center;color:#666;margin-bottom:2rem;font-size:.9rem;}.pd{margin-bottom:1.5rem;page-break-inside:avoid;}.pdh{font-weight:700;font-size:1rem;border-bottom:2px solid #333;padding-bottom:.3rem;margin-bottom:.5rem;}.ps{font-size:.88rem;margin-bottom:.3rem;padding:.2rem 0;border-bottom:1px solid #eee;}@media print{button{display:none;}}</style>
     </head><body>
     <h1>WaveGuard — Season 2026</h1><p class="sub">Printed ${new Date().toLocaleDateString()}</p>
